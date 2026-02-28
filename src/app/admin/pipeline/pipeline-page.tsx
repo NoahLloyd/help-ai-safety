@@ -20,6 +20,7 @@ export function PipelinePage() {
   const [statuses, setStatuses] = useState<Record<string, ScriptStatus>>({});
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [evalUrl, setEvalUrl] = useState("");
 
   const logRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -42,7 +43,7 @@ export function PipelinePage() {
     setLogs((prev) => [...prev, { time, text, type }]);
   }
 
-  function runScript(scriptId: string) {
+  function runScript(scriptId: string, extraParams?: string) {
     if (activeScript) return;
 
     // Close any existing connection
@@ -52,7 +53,7 @@ export function PipelinePage() {
     setStatuses((prev) => ({ ...prev, [scriptId]: "running" }));
     appendLog(`--- Starting ${scriptId} (${mode}) ---`, "status");
 
-    const url = `/api/pipeline/run?script=${scriptId}&mode=${mode}`;
+    const url = `/api/pipeline/run?script=${scriptId}&mode=${mode}${extraParams || ""}`;
     const source = new EventSource(url);
     eventSourceRef.current = source;
 
@@ -230,6 +231,65 @@ export function PipelinePage() {
             </div>
           );
         })}
+
+        {/* Evaluate card */}
+        <div
+          className={`p-4 rounded-xl border transition-all duration-150 col-span-2 lg:col-span-3 ${
+            activeScript === "evaluate"
+              ? "bg-violet-500/5 border-violet-500/40 shadow-sm shadow-violet-500/10"
+              : "bg-card border-border hover:border-border/80"
+          }`}
+        >
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">
+                AI Evaluator
+              </h3>
+              <p className="text-[11px] text-muted font-mono mt-0.5">
+                Claude scrapes, scores, and auto-promotes or rejects candidates
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div
+                className={`w-2 h-2 rounded-full ${statusColor(
+                  statuses["evaluate"] || "idle"
+                )} ${activeScript === "evaluate" ? "animate-pulse" : ""}`}
+              />
+              <span className="text-[10px] font-mono text-muted">
+                {statusLabel(statuses["evaluate"] || "idle")}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Paste an event URL to test a single evaluation..."
+              value={evalUrl}
+              onChange={(e) => setEvalUrl(e.target.value)}
+              className="flex-1 px-3 py-2 text-xs bg-background border border-border rounded-md
+                placeholder:text-muted focus:outline-none focus:border-accent/50"
+            />
+            <button
+              onClick={() => {
+                if (!evalUrl.trim()) return;
+                runScript("evaluate", `&url=${encodeURIComponent(evalUrl.trim())}`);
+              }}
+              disabled={!!activeScript || !evalUrl.trim()}
+              className="px-4 py-2 text-xs font-medium bg-violet-500 text-white rounded-md
+                hover:bg-violet-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+            >
+              Test Single
+            </button>
+            <button
+              onClick={() => runScript("evaluate")}
+              disabled={!!activeScript}
+              className="px-4 py-2 text-xs font-medium bg-foreground text-background rounded-md
+                hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+            >
+              {activeScript === "evaluate" ? "Running..." : "Evaluate All"}
+            </button>
+          </div>
+        </div>
 
         {/* Run All card */}
         <div

@@ -101,19 +101,6 @@ export default function AdminHub() {
         </p>
       </header>
 
-      {/* Pipeline link */}
-      <Link
-        href="/admin/pipeline"
-        className="group flex items-center justify-between p-4 rounded-xl bg-card border border-border
-          hover:bg-card-hover hover:border-border/80 transition-all duration-150 mb-6"
-      >
-        <div>
-          <h2 className="text-sm font-medium text-foreground">Event Pipeline</h2>
-          <p className="text-xs text-muted mt-0.5">Run gatherers, view output, manage candidates</p>
-        </div>
-        <span className="text-muted group-hover:text-foreground transition-colors text-sm">&rarr;</span>
-      </Link>
-
       {/* Category cards */}
       <div className="grid grid-cols-2 gap-3 mb-12">
         {CATEGORIES.map((cat, i) => {

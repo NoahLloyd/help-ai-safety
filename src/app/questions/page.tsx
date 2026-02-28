@@ -11,7 +11,7 @@ import {
 } from "@/lib/tracking";
 import { QuestionCard } from "@/components/questions/question-card";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import type { Variant, UserAnswers, IntentTag, PositionTag } from "@/types";
+import type { Question, Variant, UserAnswers, IntentTag, PositionTag } from "@/types";
 
 function QuestionsContent() {
   const router = useRouter();
@@ -59,7 +59,7 @@ function QuestionsContent() {
   }, [currentIndex]);
 
   // Build question sequence
-  let questions;
+  let questions: Question[];
   if (isPositioned) {
     // Positioned flow: show position type question, then optionally variant Q2
     const variantQuestions = getQuestionsForVariant(variant);

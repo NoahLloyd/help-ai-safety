@@ -14,6 +14,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { insertCandidates, type GatheredEvent } from '../lib/insert-candidates';
+import { preFilter } from '../lib/pre-filter';
 
 // Known AI safety / EA organizer calendars on Luma
 const KNOWN_CALENDARS = [
@@ -396,15 +397,25 @@ async function main() {
   const events = await gather();
   console.log(`\n  ${events.length} unique events found.`);
 
+  // Pre-filter obvious junk
+  const { kept, rejected } = preFilter(events);
+  if (rejected.length > 0) {
+    console.log(`\n🚫 Pre-filter rejected ${rejected.length} irrelevant events:`);
+    for (const r of rejected) {
+      console.log(`   ✗ "${r.event.title}" — ${r.reason}`);
+    }
+  }
+  console.log(`\n  ${kept.length} events passed pre-filter (${rejected.length} rejected).`);
+
   if (dryRun) {
-    for (const e of events) {
+    for (const e of kept) {
       console.log(`  [${e.source}] ${e.event_date || 'no-date'} | ${e.title} | ${e.location} | ${e.url}`);
     }
-    console.log(`\n✅ Dry run complete. ${events.length} events would be inserted.`);
+    console.log(`\n✅ Dry run complete. ${kept.length} events would be inserted.`);
     return;
   }
 
-  const result = await insertCandidates(events);
+  const result = await insertCandidates(kept);
   console.log(`\n✅ Done: ${result.inserted} new candidates, ${result.skipped} skipped, ${result.errors} errors.`);
 }
 

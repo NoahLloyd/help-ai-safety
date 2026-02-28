@@ -230,26 +230,34 @@ export function EventsAdminPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-muted/20 rounded-lg p-1 w-fit">
-        <button
-          onClick={() => setTab("events")}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === "events" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex gap-1 bg-muted/20 rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setTab("events")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === "events" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+          >
+            Live Events <span className="text-xs font-mono text-muted ml-1">{filtered.length}</span>
+          </button>
+          <button
+            onClick={() => setTab("candidates")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === "candidates" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+          >
+            Candidates
+            {candidateCounts.pending + candidateCounts.evaluated > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-amber-500/20 text-amber-500 rounded-full font-mono">
+                {candidateCounts.pending + candidateCounts.evaluated}
+              </span>
+            )}
+          </button>
+        </div>
+        <Link
+          href="/admin/pipeline"
+          className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
-          Live Events <span className="text-xs font-mono text-muted ml-1">{filtered.length}</span>
-        </button>
-        <button
-          onClick={() => setTab("candidates")}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === "candidates" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-        >
-          Candidates
-          {candidateCounts.pending + candidateCounts.evaluated > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-amber-500/20 text-amber-500 rounded-full font-mono">
-              {candidateCounts.pending + candidateCounts.evaluated}
-            </span>
-          )}
-        </button>
+          Pipeline &rarr;
+        </Link>
       </div>
 
       {/* ═══ EVENTS TAB ═══ */}
