@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/*
+  Light/dark mode — follows device preference via prefers-color-scheme.
+  All design tokens are CSS custom properties consumed by Tailwind's
+  @theme block below.
+*/
+
+:root {
+  --background: #fafafa;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --muted-foreground: #52525b;
+  --card: #ffffff;
+  --card-hover: #f4f4f5;
+  --border: #e4e4e7;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0c;
+    --foreground: #e8e8ed;
+    --muted: #71717a;
+    --muted-foreground: #a1a1aa;
+    --card: #141418;
+    --card-hover: #1c1c22;
+    --border: #27272a;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+  }
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.3);
+  color: var(--foreground);
+}
