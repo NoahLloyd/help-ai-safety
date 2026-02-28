@@ -7,6 +7,7 @@ const SCRIPT_MAP: Record<string, string> = {
   "gather-eventbrite": "scripts/gatherers/gather-eventbrite.ts",
   "gather-luma": "scripts/gatherers/gather-luma.ts",
   "gather-meetup": "scripts/gatherers/gather-meetup.ts",
+  "evaluate": "scripts/evaluate-event.ts",
   "sync-all": "scripts/sync-all-events.ts",
 };
 
@@ -32,12 +33,21 @@ export async function GET(req: Request) {
   const args = ["tsx", scriptPath];
 
   // For individual gatherers, add --dry-run in dry-run mode
-  if (mode === "dry-run" && scriptId !== "sync-all") {
+  if (mode === "dry-run" && scriptId !== "sync-all" && scriptId !== "evaluate") {
     args.push("--dry-run");
   }
   // For sync-all in dry-run mode, skip evaluate phase
   if (mode === "dry-run" && scriptId === "sync-all") {
     args.push("--skip-evaluate");
+  }
+  // Evaluator: single URL or full queue
+  if (scriptId === "evaluate") {
+    const evalUrl = searchParams.get("url");
+    if (evalUrl) {
+      args.push("--url", evalUrl);
+    } else {
+      args.push("--process-queue");
+    }
   }
 
   const stream = new ReadableStream({
