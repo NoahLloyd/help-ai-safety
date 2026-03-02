@@ -59,35 +59,33 @@ export const questionPositioned: Question = {
 };
 
 /**
- * Variant B: multi-select Q2
+ * Variant B: urgency-based Q2
  */
 export const questionTwoB: Question = {
-  id: "intents",
-  question: "What feels most true for you right now?",
-  subtitle: "Select all that apply.",
-  multiSelect: true,
+  id: "intent",
+  question: "What's driving you right now?",
   options: [
     {
       id: "understand",
-      label: "I want to understand this better before I act",
+      label: "I just learned something alarming",
     },
     {
       id: "connect",
-      label: "I want to find others who care about this",
+      label: "I feel alone in caring about this",
     },
     {
       id: "impact",
-      label: "I want to do something that actually moves the needle",
+      label: "I'm ready to act, just tell me where",
     },
     {
       id: "do_part",
-      label: "I want to do my part, even if it's small",
+      label: "Someone I trust pointed me here",
     },
   ],
 };
 
 /**
- * Variant D: single-select Q2
+ * Variant D: intent-based Q2
  */
 export const questionTwoD: Question = {
   id: "intent",
@@ -107,7 +105,7 @@ export const questionTwoD: Question = {
     },
     {
       id: "do_part",
-      label: "Do my part, even if it's small",
+      label: "Just point me somewhere good",
     },
   ],
 };

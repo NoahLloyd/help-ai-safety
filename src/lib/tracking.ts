@@ -103,3 +103,12 @@ export function trackStackExpanded(variant: Variant, extraCount: number) {
 export function identifyVariant(variant: Variant) {
   posthog.register({ variant });
 }
+
+/**
+ * User landed via an affiliate/creator referral link (e.g. /rob).
+ * Registers the ref as a super property so it sticks to every event.
+ */
+export function trackReferralLanded(ref: string) {
+  posthog.register({ ref });
+  posthog.capture("referral_landed", { ref });
+}

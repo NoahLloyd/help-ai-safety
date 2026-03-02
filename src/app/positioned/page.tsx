@@ -14,7 +14,7 @@ export default function PositionedPage() {
     // Set up answers as if user selected "positioned" on the home page
     const answers = { time: "significant" as const, positioned: true };
     sessionStorage.setItem("hdih_answers", JSON.stringify(answers));
-    router.replace("/questions?positioned=1");
+    router.replace("/?positioned=1");
   }, [router]);
 
   return null;

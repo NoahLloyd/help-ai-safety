@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchResources, trackClick } from "@/lib/data";
 import { rankResources, getLocalExtras } from "@/lib/ranking";
@@ -9,7 +8,6 @@ import { getGeoData } from "@/lib/geo";
 import {
   trackResultsViewed,
   trackResourceClicked,
-  trackStartOver,
   trackStackExpanded,
 } from "@/lib/tracking";
 import type {
@@ -26,64 +24,50 @@ function isStackable(r: Resource): boolean {
   return r.category === "communities" || r.category === "events";
 }
 
-export default function ResultsPage() {
-  const router = useRouter();
+interface ResultsProps {
+  variant: Variant;
+  answers: UserAnswers;
+}
+
+export function Results({ variant, answers }: ResultsProps) {
   const [results, setResults] = useState<ScoredResource[]>([]);
   const [localExtras, setLocalExtras] = useState<ScoredResource[]>([]);
-  const [variant, setVariant] = useState<Variant>("A");
-  const [answers, setAnswers] = useState<UserAnswers | null>(null);
   const [geo, setGeo] = useState<GeoData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function compute() {
-      const answersRaw = sessionStorage.getItem("hdih_answers");
-      const variantRaw = sessionStorage.getItem("hdih_variant") as Variant | null;
-
-      if (!answersRaw) {
-        router.push("/");
-        return;
-      }
-
-      const parsedAnswers: UserAnswers = JSON.parse(answersRaw);
-      const v = variantRaw || "A";
-      setVariant(v);
-      setAnswers(parsedAnswers);
-
       const resources = await fetchResources();
       const geoData: GeoData = await getGeoData();
       setGeo(geoData);
 
-      const ranked = rankResources(resources, parsedAnswers, geoData, v);
+      const ranked = rankResources(resources, answers, geoData, variant);
       setResults(ranked);
 
-      // Track results viewed
       trackResultsViewed(
-        v,
-        parsedAnswers.time,
-        parsedAnswers.intents || parsedAnswers.intent,
-        parsedAnswers.positioned,
-        parsedAnswers.positionType,
+        variant,
+        answers.time,
+        answers.intents || answers.intent,
+        answers.positioned,
+        answers.positionType,
         ranked.length
       );
 
-      // Find extra local communities/events to stack behind the first one shown
       const selectedIds = new Set(ranked.map((r) => r.resource.id));
-      const extras = getLocalExtras(resources, parsedAnswers, geoData, v, selectedIds);
+      const extras = getLocalExtras(resources, answers, geoData, variant, selectedIds);
       setLocalExtras(extras);
 
       setLoading(false);
     }
 
     compute();
-  }, [router]);
+  }, [variant, answers]);
 
   const handleResourceClick = useCallback(
     (resourceId: string, position: number) => {
-      if (answers && geo) {
+      if (geo) {
         trackClick(resourceId, variant, answers, geo.countryCode);
 
-        // Find the resource for richer tracking
         const allResults = [...results, ...localExtras];
         const scored = allResults.find((r) => r.resource.id === resourceId);
         if (scored) {
@@ -97,10 +81,9 @@ export default function ResultsPage() {
         }
       }
     },
-    [answers, variant, geo, results, localExtras]
+    [variant, geo, results, localExtras, answers]
   );
 
-  // Find the index of the first stackable result (community/event) that has extras to attach
   const stackAnchorIndex = useMemo(() => {
     if (localExtras.length === 0) return -1;
     return results.findIndex((r) => isStackable(r.resource));
@@ -136,11 +119,6 @@ export default function ResultsPage() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             Here&apos;s how you can help.
           </h1>
-          <p className="mt-2 text-base text-muted-foreground">
-            {isPositioned
-              ? "Based on your background, these are the highest-impact actions for you."
-              : "Based on your answers, we think this is the best place to start."}
-          </p>
         </motion.div>
 
         {/* Primary Recommendation */}
@@ -182,11 +160,11 @@ export default function ResultsPage() {
             transition={{ delay: 0.5, duration: 0.5 }}
           >
             <p className="mb-3 text-sm text-muted-foreground">
-              Also worth checking out
+              Also check out
             </p>
             <div className="flex flex-col gap-3">
               {secondary.map((scored, i) => {
-                const globalIndex = i + 1; // offset by 1 since primary is index 0
+                const globalIndex = i + 1;
                 return (
                   <motion.div
                     key={scored.resource.id}
@@ -216,24 +194,7 @@ export default function ResultsPage() {
           </motion.div>
         )}
 
-        {/* Start Over */}
-        <motion.div
-          className="mt-12 border-t border-border pt-8 pb-8 text-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2 }}
-        >
-          <button
-            onClick={() => {
-              trackStartOver(variant);
-              sessionStorage.removeItem("hdih_answers");
-              router.push("/");
-            }}
-            className="text-sm text-muted transition-colors hover:text-foreground"
-          >
-            ← Start over
-          </button>
-        </motion.div>
+        <div className="pb-8" />
       </div>
     </main>
   );
@@ -252,7 +213,6 @@ interface StackedGroupProps {
 function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGroupProps) {
   const [expanded, setExpanded] = useState(false);
 
-  // Build a label from what's actually in the extras
   const hasCommunities = extras.some((e) => e.resource.category === "communities");
   const hasEvents = extras.some((e) => e.resource.category === "events");
   const label = hasCommunities && hasEvents
@@ -265,17 +225,14 @@ function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGro
 
   return (
     <div className="relative">
-      {/* Main card */}
       <ResourceCard
         scored={anchor}
         variant={variant}
         onClickTrack={onClickTrack}
       />
 
-      {/* Stacked indicator + expand */}
       {extras.length > 0 && (
         <div className="relative mt-[-4px] ml-2 mr-2">
-          {/* Visual stack layers behind (visible when collapsed) */}
           {!expanded && (
             <div className="absolute inset-x-1 top-0 h-3 rounded-b-xl border border-t-0 border-border bg-card/60" />
           )}

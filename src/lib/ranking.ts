@@ -75,7 +75,12 @@ function locationFit(resource: Resource, geo: GeoData): number {
     return 1.2;
   }
 
-  // Location-specific but doesn't match — still show, just reduced
+  // Events/communities with a specific location that doesn't match → exclude
+  if (isLocalCategory(resource)) {
+    return 0.0;
+  }
+
+  // Other categories: location-specific but doesn't match — reduced
   return 0.3;
 }
 
@@ -226,9 +231,18 @@ export function rankResources(
   const selected: ScoredResource[] = [];
   const remaining = [...regularPool].sort((a, b) => b.score - a.score);
 
+  let hasStackable = false;
+
   while (selected.length < maxResults && remaining.length > 0) {
     const best = remaining.shift()!;
     if (selected.length >= minResults && best.score < MIN_SCORE_THRESHOLD) break;
+
+    // Only allow one event/community card — extras go in the stacked dropdown
+    if (isLocalCategory(best.resource)) {
+      if (hasStackable) continue;
+      hasStackable = true;
+    }
+
     selected.push(best);
 
     for (const item of remaining) {

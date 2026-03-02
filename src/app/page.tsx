@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { questionOne } from "@/data/questions";
 import { getVariant, setVariant as persistVariant } from "@/lib/variants";
@@ -10,14 +9,40 @@ import {
   trackQuestionAnswered,
   identifyVariant,
 } from "@/lib/tracking";
-import type { Variant, TimeCommitment } from "@/types";
+import { Questions } from "@/components/funnel/questions";
+import { Results } from "@/components/funnel/results";
+import type { Variant, TimeCommitment, UserAnswers } from "@/types";
+
+type Step = "home" | "questions" | "results";
 
 const VARIANTS: Variant[] = ["A", "B", "D"];
 
 export default function Home() {
-  const router = useRouter();
   const [variant, setVariantState] = useState<Variant>("A");
+  const [step, setStep] = useState<Step>("home");
+  const [answers, setAnswers] = useState<UserAnswers>({ time: "minutes" });
+  const [isPositioned, setIsPositioned] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+
+  // Push a virtual history entry when advancing steps
+  function goTo(nextStep: Step) {
+    history.pushState({ step: nextStep }, "");
+    setStep(nextStep);
+  }
+
+  // Listen for browser back button / swipe back
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      const prevStep = (e.state?.step as Step) || "home";
+      setStep(prevStep);
+    }
+    window.addEventListener("popstate", onPopState);
+
+    // Seed the initial history entry so we have something to pop back to
+    history.replaceState({ step: "home" }, "");
+
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     const v = getVariant();
@@ -37,25 +62,52 @@ export default function Home() {
     trackQuestionAnswered("readiness", optionId, variant);
 
     if (optionId === "positioned") {
-      // Store that user is positioned and go to positioned follow-up
-      const answers = { time: "significant" as TimeCommitment, positioned: true };
-      sessionStorage.setItem("hdih_answers", JSON.stringify(answers));
+      const newAnswers = { time: "significant" as TimeCommitment, positioned: true };
+      setAnswers(newAnswers);
+      setIsPositioned(true);
+      sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
       sessionStorage.setItem("hdih_variant", variant);
-      router.push("/questions?positioned=1");
+      goTo("questions");
     } else {
-      // Store time answer and navigate to questions (or results for variant A)
       const time = optionId as TimeCommitment;
-      const answers = { time };
-      sessionStorage.setItem("hdih_answers", JSON.stringify(answers));
+      const newAnswers = { time };
+      setAnswers(newAnswers);
+      setIsPositioned(false);
+      sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
       sessionStorage.setItem("hdih_variant", variant);
 
-      // Variant A has no further questions — go straight to results
       if (variant === "A") {
-        router.push("/results");
+        goTo("results");
       } else {
-        router.push("/questions");
+        goTo("questions");
       }
     }
+  }
+
+  const handleQuestionsComplete = useCallback((finalAnswers: UserAnswers) => {
+    setAnswers(finalAnswers);
+    goTo("results");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (step === "questions") {
+    return (
+      <Questions
+        variant={variant}
+        answers={answers}
+        isPositioned={isPositioned}
+        onComplete={handleQuestionsComplete}
+      />
+    );
+  }
+
+  if (step === "results") {
+    return (
+      <Results
+        variant={variant}
+        answers={answers}
+      />
+    );
   }
 
   return (
@@ -76,8 +128,7 @@ export default function Home() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3, duration: 0.6 }}
         >
-          AI is moving fast, and the stakes are enormous. A few quick questions
-          will help us point you in the right direction.
+          A few quick questions, then we&apos;ll point you in the right direction.
         </motion.p>
 
         <motion.div
