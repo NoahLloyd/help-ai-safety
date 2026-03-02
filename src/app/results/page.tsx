@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchResources, trackClick } from "@/lib/data";
-import { rankResources, getLocalExtras } from "@/lib/ranking";
+import { rankResources, buildLocalCard } from "@/lib/ranking";
 import { getGeoData } from "@/lib/geo";
 import {
   trackResultsViewed,
@@ -17,19 +17,18 @@ import type {
   Variant,
   GeoData,
   ScoredResource,
-  Resource,
+  LocalCard,
 } from "@/types";
 import { ResourceCard } from "@/components/results/resource-card";
 
-/** True if resource is a community or event (stackable category) */
-function isStackable(r: Resource): boolean {
-  return r.category === "communities" || r.category === "events";
-}
+/** A result item is either a normal scored resource or the local card */
+type ResultItem =
+  | { kind: "resource"; scored: ScoredResource }
+  | { kind: "local"; card: LocalCard };
 
 export default function ResultsPage() {
   const router = useRouter();
-  const [results, setResults] = useState<ScoredResource[]>([]);
-  const [localExtras, setLocalExtras] = useState<ScoredResource[]>([]);
+  const [items, setItems] = useState<ResultItem[]>([]);
   const [variant, setVariant] = useState<Variant>("A");
   const [answers, setAnswers] = useState<UserAnswers | null>(null);
   const [geo, setGeo] = useState<GeoData | null>(null);
@@ -54,8 +53,45 @@ export default function ResultsPage() {
       const geoData: GeoData = await getGeoData();
       setGeo(geoData);
 
+      // Debug: understand what data we're working with
+      const events = resources.filter((r) => r.category === "events");
+      const communities = resources.filter((r) => r.category === "communities");
+      console.log("[results] geo:", geoData);
+      console.log(`[results] ${resources.length} resources (${events.length} events, ${communities.length} communities)`);
+      if (events.length > 0) {
+        console.log("[results] sample event locations:", events.slice(0, 5).map((e) => e.location));
+      }
+
+      // Rank non-local resources (letters, programs, other)
       const ranked = rankResources(resources, parsedAnswers, geoData, v);
-      setResults(ranked);
+
+      // Build the collapsed local card (events + communities)
+      const localCard = buildLocalCard(resources, parsedAnswers, geoData, v);
+      console.log("[results] localCard:", localCard ? `anchor="${localCard.anchor.resource.title}" score=${localCard.score.toFixed(3)} extras=${localCard.extras.length}` : "null (no nearby events/communities)");
+
+      // Merge the local card into the ranked list at its scored position
+      const merged: ResultItem[] = ranked.map((scored) => ({
+        kind: "resource" as const,
+        scored,
+      }));
+
+      if (localCard) {
+        // Find where the local card's score fits in the sorted list
+        const insertIdx = merged.findIndex(
+          (item) =>
+            item.kind === "resource" && item.scored.score < localCard.score
+        );
+        const localItem: ResultItem = { kind: "local", card: localCard };
+
+        if (insertIdx === -1) {
+          // Lower than everything — append at end
+          merged.push(localItem);
+        } else {
+          merged.splice(insertIdx, 0, localItem);
+        }
+      }
+
+      setItems(merged);
 
       // Track results viewed
       trackResultsViewed(
@@ -64,13 +100,8 @@ export default function ResultsPage() {
         parsedAnswers.intents || parsedAnswers.intent,
         parsedAnswers.positioned,
         parsedAnswers.positionType,
-        ranked.length
+        merged.length
       );
-
-      // Find extra local communities/events to stack behind the first one shown
-      const selectedIds = new Set(ranked.map((r) => r.resource.id));
-      const extras = getLocalExtras(resources, parsedAnswers, geoData, v, selectedIds);
-      setLocalExtras(extras);
 
       setLoading(false);
     }
@@ -83,28 +114,36 @@ export default function ResultsPage() {
       if (answers && geo) {
         trackClick(resourceId, variant, answers, geo.countryCode);
 
-        // Find the resource for richer tracking
-        const allResults = [...results, ...localExtras];
-        const scored = allResults.find((r) => r.resource.id === resourceId);
-        if (scored) {
+        // Find the resource across all items for richer tracking
+        let found: ScoredResource | undefined;
+        for (const item of items) {
+          if (item.kind === "resource" && item.scored.resource.id === resourceId) {
+            found = item.scored;
+            break;
+          }
+          if (item.kind === "local") {
+            if (item.card.anchor.resource.id === resourceId) {
+              found = item.card.anchor;
+              break;
+            }
+            found = item.card.extras.find((e) => e.resource.id === resourceId);
+            if (found) break;
+          }
+        }
+
+        if (found) {
           trackResourceClicked(
             resourceId,
-            scored.resource.title,
-            scored.resource.category,
+            found.resource.title,
+            found.resource.category,
             variant,
             position
           );
         }
       }
     },
-    [answers, variant, geo, results, localExtras]
+    [answers, variant, geo, items]
   );
-
-  // Find the index of the first stackable result (community/event) that has extras to attach
-  const stackAnchorIndex = useMemo(() => {
-    if (localExtras.length === 0) return -1;
-    return results.findIndex((r) => isStackable(r.resource));
-  }, [results, localExtras]);
 
   if (loading) {
     return (
@@ -121,8 +160,8 @@ export default function ResultsPage() {
   }
 
   const isPositioned = answers?.positioned;
-  const primary = results[0];
-  const secondary = results.slice(1);
+  const primary = items[0];
+  const secondary = items.slice(1);
 
   return (
     <main className="min-h-dvh px-6 py-12">
@@ -154,22 +193,13 @@ export default function ResultsPage() {
             <p className="mb-3 text-xs font-medium uppercase tracking-wider text-accent">
               Your #1 action
             </p>
-            {stackAnchorIndex === 0 ? (
-              <StackedGroup
-                anchor={primary}
-                extras={localExtras}
-                variant={variant}
-                geo={geo}
-                onClickTrack={(id) => handleResourceClick(id, 0)}
-              />
-            ) : (
-              <ResourceCard
-                scored={primary}
-                variant={variant}
-                isPrimary
-                onClickTrack={(id) => handleResourceClick(id, 0)}
-              />
-            )}
+            <ResultItemRenderer
+              item={primary}
+              variant={variant}
+              geo={geo}
+              isPrimary
+              onClickTrack={(id) => handleResourceClick(id, 0)}
+            />
           </motion.div>
         )}
 
@@ -185,30 +215,24 @@ export default function ResultsPage() {
               Also worth checking out
             </p>
             <div className="flex flex-col gap-3">
-              {secondary.map((scored, i) => {
-                const globalIndex = i + 1; // offset by 1 since primary is index 0
+              {secondary.map((item, i) => {
+                const key =
+                  item.kind === "resource"
+                    ? item.scored.resource.id
+                    : `local-card-${item.card.anchor.resource.id}`;
                 return (
                   <motion.div
-                    key={scored.resource.id}
+                    key={key}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6 + i * 0.1 }}
                   >
-                    {stackAnchorIndex === globalIndex ? (
-                      <StackedGroup
-                        anchor={scored}
-                        extras={localExtras}
-                        variant={variant}
-                        geo={geo}
-                        onClickTrack={(id) => handleResourceClick(id, globalIndex)}
-                      />
-                    ) : (
-                      <ResourceCard
-                        scored={scored}
-                        variant={variant}
-                        onClickTrack={(id) => handleResourceClick(id, globalIndex)}
-                      />
-                    )}
+                    <ResultItemRenderer
+                      item={item}
+                      variant={variant}
+                      geo={geo}
+                      onClickTrack={(id) => handleResourceClick(id, i + 1)}
+                    />
                   </motion.div>
                 );
               })}
@@ -239,6 +263,45 @@ export default function ResultsPage() {
   );
 }
 
+// ─── Result Item Renderer ────────────────────────────────────
+
+interface ResultItemRendererProps {
+  item: ResultItem;
+  variant: Variant;
+  geo: GeoData | null;
+  isPrimary?: boolean;
+  onClickTrack: (resourceId: string) => void;
+}
+
+function ResultItemRenderer({
+  item,
+  variant,
+  geo,
+  isPrimary,
+  onClickTrack,
+}: ResultItemRendererProps) {
+  if (item.kind === "local") {
+    return (
+      <StackedGroup
+        anchor={item.card.anchor}
+        extras={item.card.extras}
+        variant={variant}
+        geo={geo}
+        onClickTrack={onClickTrack}
+      />
+    );
+  }
+
+  return (
+    <ResourceCard
+      scored={item.scored}
+      variant={variant}
+      isPrimary={isPrimary}
+      onClickTrack={(id) => onClickTrack(id)}
+    />
+  );
+}
+
 // ─── Stacked Group Component ─────────────────────────────────
 
 interface StackedGroupProps {
@@ -253,8 +316,12 @@ function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGro
   const [expanded, setExpanded] = useState(false);
 
   // Build a label from what's actually in the extras
-  const hasCommunities = extras.some((e) => e.resource.category === "communities");
-  const hasEvents = extras.some((e) => e.resource.category === "events");
+  const hasCommunities =
+    anchor.resource.category === "communities" ||
+    extras.some((e) => e.resource.category === "communities");
+  const hasEvents =
+    anchor.resource.category === "events" ||
+    extras.some((e) => e.resource.category === "events");
   const label = hasCommunities && hasEvents
     ? "communities & events"
     : hasCommunities
