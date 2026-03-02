@@ -7,37 +7,26 @@
 */
 
 :root {
-  --background: #fafafa;
-  --foreground: #18181b;
-  --muted: #71717a;
-  --muted-foreground: #52525b;
-  --card: #ffffff;
-  --card-hover: #f4f4f5;
-  --border: #e4e4e7;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
+  /* Brand colors — adjust these to retheme the entire app */
+  --primary: #0D9373;
+  --primary-hover: #0B7D62;
+  --background: #FAF8F5;
+  --foreground: #1A1A2E;
+
+  /* Derived tokens */
+  --muted: #7A7A8E;
+  --muted-foreground: #4A4A5E;
+  --card: #FFFFFF;
+  --card-hover: #F2EFEB;
+  --border: #E2DFD9;
+  --accent: var(--primary);
+  --accent-hover: var(--primary-hover);
   --radius: 12px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0c;
-    --foreground: #e8e8ed;
-    --muted: #71717a;
-    --muted-foreground: #a1a1aa;
-    --card: #141418;
-    --card-hover: #1c1c22;
-    --border: #27272a;
-    --accent: #6366f1;
-    --accent-hover: #818cf8;
-  }
-}
-
-:root {
-  color-scheme: light dark;
-}
-
 @theme {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
@@ -64,6 +53,6 @@ html {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.3);
+  background: rgba(13, 147, 115, 0.25);
   color: var(--foreground);
 }

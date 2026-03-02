@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { initPostHog, posthog } from "@/lib/posthog";
+import { trackReferralLanded } from "@/lib/tracking";
+
+const REF_KEY = "hdih_ref";
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -10,6 +13,13 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     initPostHog();
+
+    // Pick up affiliate referral stored by the [slug] catch-all route
+    const ref = sessionStorage.getItem(REF_KEY);
+    if (ref) {
+      trackReferralLanded(ref);
+      sessionStorage.removeItem(REF_KEY);
+    }
   }, []);
 
   // Track page views on route change

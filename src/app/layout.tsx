@@ -19,6 +19,13 @@ export const metadata: Metadata = {
   description:
     "You've seen the warnings about AI. Now find out how you can actually help — whether you're technical, non-technical, or just getting started.",
   metadataBase: new URL("https://howdoihelp.ai"),
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-icon.png",
+  },
   openGraph: {
     title: "How Do I Help? — AI Safety",
     description:

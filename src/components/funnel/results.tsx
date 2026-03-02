@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchResources, trackClick } from "@/lib/data";
 import { rankResources, buildLocalCard } from "@/lib/ranking";
@@ -9,7 +8,6 @@ import { getGeoData } from "@/lib/geo";
 import {
   trackResultsViewed,
   trackResourceClicked,
-  trackStartOver,
   trackStackExpanded,
 } from "@/lib/tracking";
 import type {
@@ -26,48 +24,27 @@ type ResultItem =
   | { kind: "resource"; scored: ScoredResource }
   | { kind: "local"; card: LocalCard };
 
-export default function ResultsPage() {
-  const router = useRouter();
+interface ResultsProps {
+  variant: Variant;
+  answers: UserAnswers;
+}
+
+export function Results({ variant, answers }: ResultsProps) {
   const [items, setItems] = useState<ResultItem[]>([]);
-  const [variant, setVariant] = useState<Variant>("A");
-  const [answers, setAnswers] = useState<UserAnswers | null>(null);
   const [geo, setGeo] = useState<GeoData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function compute() {
-      const answersRaw = sessionStorage.getItem("hdih_answers");
-      const variantRaw = sessionStorage.getItem("hdih_variant") as Variant | null;
-
-      if (!answersRaw) {
-        router.push("/");
-        return;
-      }
-
-      const parsedAnswers: UserAnswers = JSON.parse(answersRaw);
-      const v = variantRaw || "A";
-      setVariant(v);
-      setAnswers(parsedAnswers);
-
       const resources = await fetchResources();
       const geoData: GeoData = await getGeoData();
       setGeo(geoData);
 
-      // Debug: understand what data we're working with
-      const events = resources.filter((r) => r.category === "events");
-      const communities = resources.filter((r) => r.category === "communities");
-      console.log("[results] geo:", geoData);
-      console.log(`[results] ${resources.length} resources (${events.length} events, ${communities.length} communities)`);
-      if (events.length > 0) {
-        console.log("[results] sample event locations:", events.slice(0, 5).map((e) => e.location));
-      }
-
       // Rank non-local resources (letters, programs, other)
-      const ranked = rankResources(resources, parsedAnswers, geoData, v);
+      const ranked = rankResources(resources, answers, geoData, variant);
 
       // Build the collapsed local card (events + communities)
-      const localCard = buildLocalCard(resources, parsedAnswers, geoData, v);
-      console.log("[results] localCard:", localCard ? `anchor="${localCard.anchor.resource.title}" score=${localCard.score.toFixed(3)} extras=${localCard.extras.length}` : "null (no nearby events/communities)");
+      const localCard = buildLocalCard(resources, answers, geoData, variant);
 
       // Merge the local card into the ranked list at its scored position
       const merged: ResultItem[] = ranked.map((scored) => ({
@@ -93,13 +70,12 @@ export default function ResultsPage() {
 
       setItems(merged);
 
-      // Track results viewed
       trackResultsViewed(
-        v,
-        parsedAnswers.time,
-        parsedAnswers.intents || parsedAnswers.intent,
-        parsedAnswers.positioned,
-        parsedAnswers.positionType,
+        variant,
+        answers.time,
+        answers.intents || answers.intent,
+        answers.positioned,
+        answers.positionType,
         merged.length
       );
 
@@ -107,11 +83,11 @@ export default function ResultsPage() {
     }
 
     compute();
-  }, [router]);
+  }, [variant, answers]);
 
   const handleResourceClick = useCallback(
     (resourceId: string, position: number) => {
-      if (answers && geo) {
+      if (geo) {
         trackClick(resourceId, variant, answers, geo.countryCode);
 
         // Find the resource across all items for richer tracking
@@ -159,7 +135,6 @@ export default function ResultsPage() {
     );
   }
 
-  const isPositioned = answers?.positioned;
   const primary = items[0];
   const secondary = items.slice(1);
 
@@ -175,11 +150,6 @@ export default function ResultsPage() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             Here&apos;s how you can help.
           </h1>
-          <p className="mt-2 text-base text-muted-foreground">
-            {isPositioned
-              ? "Based on your background, these are the highest-impact actions for you."
-              : "Based on your answers, we think this is the best place to start."}
-          </p>
         </motion.div>
 
         {/* Primary Recommendation */}
@@ -212,7 +182,7 @@ export default function ResultsPage() {
             transition={{ delay: 0.5, duration: 0.5 }}
           >
             <p className="mb-3 text-sm text-muted-foreground">
-              Also worth checking out
+              Also check out
             </p>
             <div className="flex flex-col gap-3">
               {secondary.map((item, i) => {
@@ -240,24 +210,7 @@ export default function ResultsPage() {
           </motion.div>
         )}
 
-        {/* Start Over */}
-        <motion.div
-          className="mt-12 border-t border-border pt-8 pb-8 text-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2 }}
-        >
-          <button
-            onClick={() => {
-              trackStartOver(variant);
-              sessionStorage.removeItem("hdih_answers");
-              router.push("/");
-            }}
-            className="text-sm text-muted transition-colors hover:text-foreground"
-          >
-            ← Start over
-          </button>
-        </motion.div>
+        <div className="pb-8" />
       </div>
     </main>
   );
@@ -332,17 +285,14 @@ function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGro
 
   return (
     <div className="relative">
-      {/* Main card */}
       <ResourceCard
         scored={anchor}
         variant={variant}
         onClickTrack={onClickTrack}
       />
 
-      {/* Stacked indicator + expand */}
       {extras.length > 0 && (
         <div className="relative mt-[-4px] ml-2 mr-2">
-          {/* Visual stack layers behind (visible when collapsed) */}
           {!expanded && (
             <div className="absolute inset-x-1 top-0 h-3 rounded-b-xl border border-t-0 border-border bg-card/60" />
           )}
