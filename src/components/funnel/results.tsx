@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchResources, trackClick } from "@/lib/data";
 import { rankResources, buildLocalCard } from "@/lib/ranking";
@@ -11,6 +11,7 @@ import {
   trackStackExpanded,
 } from "@/lib/tracking";
 import type {
+  Resource,
   UserAnswers,
   Variant,
   GeoData,
@@ -18,11 +19,12 @@ import type {
   LocalCard,
 } from "@/types";
 import { ResourceCard } from "@/components/results/resource-card";
+import { LocationPicker } from "@/components/results/location-picker";
 
 /** A result item is either a normal scored resource or the local card */
 type ResultItem =
   | { kind: "resource"; scored: ScoredResource }
-  | { kind: "local"; card: LocalCard };
+  | { kind: "local"; card: LocalCard | null };
 
 interface ResultsProps {
   variant: Variant;
@@ -32,40 +34,47 @@ interface ResultsProps {
 export function Results({ variant, answers }: ResultsProps) {
   const [items, setItems] = useState<ResultItem[]>([]);
   const [geo, setGeo] = useState<GeoData | null>(null);
+  const [localGeo, setLocalGeo] = useState<GeoData | null>(null);
+  const [allResources, setAllResources] = useState<Resource[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const localCardIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    async function compute() {
+    async function init() {
       const resources = await fetchResources();
       const geoData: GeoData = await getGeoData();
+      setAllResources(resources);
       setGeo(geoData);
+      setLocalGeo(geoData);
 
-      // Rank non-local resources (letters, programs, other)
+      // Rank non-local resources
       const ranked = rankResources(resources, answers, geoData, variant);
-
-      // Build the collapsed local card (events + communities)
       const localCard = buildLocalCard(resources, answers, geoData, variant);
 
-      // Merge the local card into the ranked list at its scored position
       const merged: ResultItem[] = ranked.map((scored) => ({
         kind: "resource" as const,
         scored,
       }));
 
+      // Always insert a local card slot (even if null content initially)
+      const localItem: ResultItem = { kind: "local", card: localCard };
+
       if (localCard) {
-        // Find where the local card's score fits in the sorted list
         const insertIdx = merged.findIndex(
           (item) =>
             item.kind === "resource" && item.scored.score < localCard.score
         );
-        const localItem: ResultItem = { kind: "local", card: localCard };
-
         if (insertIdx === -1) {
-          // Lower than everything — append at end
+          localCardIndexRef.current = merged.length;
           merged.push(localItem);
         } else {
+          localCardIndexRef.current = insertIdx;
           merged.splice(insertIdx, 0, localItem);
         }
+      } else {
+        // No local results — append at end
+        localCardIndexRef.current = merged.length;
+        merged.push(localItem);
       }
 
       setItems(merged);
@@ -82,22 +91,39 @@ export function Results({ variant, answers }: ResultsProps) {
       setLoading(false);
     }
 
-    compute();
+    init();
   }, [variant, answers]);
+
+  // Re-rank only the local card when the user picks a new location
+  const handleLocationChange = useCallback(
+    (newGeo: GeoData) => {
+      setLocalGeo(newGeo);
+      if (!allResources || localCardIndexRef.current === null) return;
+
+      const newLocalCard = buildLocalCard(allResources, answers, newGeo, variant);
+
+      setItems((prev) => {
+        const updated = [...prev];
+        const idx = localCardIndexRef.current!;
+        updated[idx] = { kind: "local", card: newLocalCard };
+        return updated;
+      });
+    },
+    [allResources, answers, variant]
+  );
 
   const handleResourceClick = useCallback(
     (resourceId: string, position: number) => {
       if (geo) {
         trackClick(resourceId, variant, answers, geo.countryCode);
 
-        // Find the resource across all items for richer tracking
         let found: ScoredResource | undefined;
         for (const item of items) {
           if (item.kind === "resource" && item.scored.resource.id === resourceId) {
             found = item.scored;
             break;
           }
-          if (item.kind === "local") {
+          if (item.kind === "local" && item.card) {
             if (item.card.anchor.resource.id === resourceId) {
               found = item.card.anchor;
               break;
@@ -166,9 +192,10 @@ export function Results({ variant, answers }: ResultsProps) {
             <ResultItemRenderer
               item={primary}
               variant={variant}
-              geo={geo}
+              geo={localGeo}
               isPrimary
               onClickTrack={(id) => handleResourceClick(id, 0)}
+              onLocationChange={handleLocationChange}
             />
           </motion.div>
         )}
@@ -189,7 +216,7 @@ export function Results({ variant, answers }: ResultsProps) {
                 const key =
                   item.kind === "resource"
                     ? item.scored.resource.id
-                    : `local-card-${item.card.anchor.resource.id}`;
+                    : "local-card";
                 return (
                   <motion.div
                     key={key}
@@ -200,8 +227,9 @@ export function Results({ variant, answers }: ResultsProps) {
                     <ResultItemRenderer
                       item={item}
                       variant={variant}
-                      geo={geo}
+                      geo={localGeo}
                       onClickTrack={(id) => handleResourceClick(id, i + 1)}
+                      onLocationChange={handleLocationChange}
                     />
                   </motion.div>
                 );
@@ -224,6 +252,7 @@ interface ResultItemRendererProps {
   geo: GeoData | null;
   isPrimary?: boolean;
   onClickTrack: (resourceId: string) => void;
+  onLocationChange: (geo: GeoData) => void;
 }
 
 function ResultItemRenderer({
@@ -232,15 +261,16 @@ function ResultItemRenderer({
   geo,
   isPrimary,
   onClickTrack,
+  onLocationChange,
 }: ResultItemRendererProps) {
   if (item.kind === "local") {
     return (
-      <StackedGroup
-        anchor={item.card.anchor}
-        extras={item.card.extras}
+      <LocalCardGroup
+        card={item.card}
         variant={variant}
         geo={geo}
         onClickTrack={onClickTrack}
+        onLocationChange={onLocationChange}
       />
     );
   }
@@ -255,49 +285,70 @@ function ResultItemRenderer({
   );
 }
 
-// ─── Stacked Group Component ─────────────────────────────────
+// ─── Local Card Group Component ──────────────────────────────
 
-interface StackedGroupProps {
-  anchor: ScoredResource;
-  extras: ScoredResource[];
+interface LocalCardGroupProps {
+  card: LocalCard | null;
   variant: Variant;
   geo: GeoData | null;
   onClickTrack: (resourceId: string) => void;
+  onLocationChange: (geo: GeoData) => void;
 }
 
-function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGroupProps) {
+function LocalCardGroup({ card, variant, geo, onClickTrack, onLocationChange }: LocalCardGroupProps) {
   const [expanded, setExpanded] = useState(false);
 
-  // Build a label from what's actually in the extras
-  const hasCommunities =
-    anchor.resource.category === "communities" ||
-    extras.some((e) => e.resource.category === "communities");
-  const hasEvents =
-    anchor.resource.category === "events" ||
-    extras.some((e) => e.resource.category === "events");
+  const extras = card?.extras ?? [];
+
+  // Build a label from what's actually in the card
+  const hasCommunities = card
+    ? (card.anchor.resource.category === "communities" ||
+       card.extras.some((e) => e.resource.category === "communities"))
+    : false;
+  const hasEvents = card
+    ? (card.anchor.resource.category === "events" ||
+       card.extras.some((e) => e.resource.category === "events"))
+    : false;
   const label = hasCommunities && hasEvents
     ? "communities & events"
     : hasCommunities
       ? "communities"
       : hasEvents
         ? "events"
-        : "more";
+        : "communities & events";
+
+  if (!card) {
+    // Empty state — no events/communities at this location
+    return (
+      <div className="rounded-xl border border-border bg-card px-5 py-5">
+        <p className="text-sm text-muted-foreground">
+          No {label} found
+          {geo ? (
+            <> near <LocationPicker geo={geo} onLocationChange={onLocationChange} /></>
+          ) : ""}.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative">
       <ResourceCard
-        scored={anchor}
+        scored={card.anchor}
         variant={variant}
         onClickTrack={onClickTrack}
       />
 
+      {/* Expand bar with integrated location picker */}
       {extras.length > 0 && (
         <div className="relative mt-[-4px] ml-2 mr-2">
           {!expanded && (
             <div className="absolute inset-x-1 top-0 h-3 rounded-b-xl border border-t-0 border-border bg-card/60" />
           )}
 
-          <button
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => {
               const willExpand = !expanded;
               setExpanded(willExpand);
@@ -305,14 +356,14 @@ function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGro
                 trackStackExpanded(variant, extras.length);
               }
             }}
-            className={`relative z-10 flex w-full items-center justify-between rounded-b-xl border border-t-0 border-border bg-card/80 px-4 py-2.5 text-left transition-colors hover:bg-card-hover ${
-              !expanded ? "mt-1" : ""
-            }`}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); } }}
+            className="relative z-10 mt-1 flex w-full cursor-pointer items-center justify-between rounded-b-xl border border-t-0 border-border bg-card/80 px-4 py-2.5 text-left transition-colors hover:bg-card-hover"
           >
             <span className="text-xs text-muted-foreground">
-              {expanded
-                ? "Hide"
-                : `${extras.length} more ${label}${geo?.city && geo.city !== "Unknown" ? ` near ${geo.city}` : ""}`}
+              {extras.length} more {label}
+              {geo && (
+                <> near<LocationPicker geo={geo} onLocationChange={onLocationChange} /></>
+              )}
             </span>
             <motion.span
               animate={{ rotate: expanded ? 180 : 0 }}
@@ -321,7 +372,7 @@ function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGro
             >
               ↓
             </motion.span>
-          </button>
+          </div>
 
           <AnimatePresence>
             {expanded && (
@@ -345,6 +396,15 @@ function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGro
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+      )}
+
+      {/* No extras but has anchor — show location in a subtle footer */}
+      {extras.length === 0 && geo && (
+        <div className="mt-[-4px] ml-2 mr-2">
+          <div className="rounded-b-xl border border-t-0 border-border bg-card/80 px-4 py-2 text-xs text-muted-foreground">
+            Near <LocationPicker geo={geo} onLocationChange={onLocationChange} />
+          </div>
         </div>
       )}
     </div>
