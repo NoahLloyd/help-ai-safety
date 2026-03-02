@@ -49,6 +49,25 @@ export function ResourceCard({
         {resource.description}
       </p>
 
+      {/* Event date + location */}
+      {(resource.event_date || (resource.location && resource.location !== "Global" && resource.location !== "Online")) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {resource.event_date && (
+            <span className="font-medium">
+              {new Date(resource.event_date).toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                timeZone: "UTC",
+              })}
+            </span>
+          )}
+          {resource.location && resource.location !== "Global" && resource.location !== "Online" && (
+            <span>{resource.location}</span>
+          )}
+        </div>
+      )}
+
       {/* Deadline */}
       {resource.deadline_date && (
         <div className="mt-2">

@@ -1,6 +1,7 @@
 import {
   Resource,
   ScoredResource,
+  LocalCard,
   UserAnswers,
   GeoData,
   Variant,
@@ -44,6 +45,15 @@ const SIM_WEIGHTS = {
 
 // ─── Location matching ──────────────────────────────────────
 
+// City aliases for metro areas where location strings vary widely
+const CITY_ALIASES: Record<string, string[]> = {
+  "san francisco": ["sf", "bay area", "silicon valley", "oakland", "berkeley", "palo alto", "san jose", "mountain view", "sunnyvale"],
+  "new york": ["nyc", "manhattan", "brooklyn", "queens"],
+  "london": ["uk", "united kingdom"],
+  "los angeles": ["la", "santa monica", "pasadena"],
+  "washington": ["dc", "d.c.", "arlington"],
+};
+
 function locationFit(resource: Resource, geo: GeoData): number {
   // Suppress letters in authoritarian countries
   if (geo.isAuthoritarian && resource.category === "letters") {
@@ -55,9 +65,14 @@ function locationFit(resource: Resource, geo: GeoData): number {
   // Global/Online → available everywhere
   if (loc === "global" || loc === "online" || loc === "") return 1.0;
 
-  // City match → strongest signal (check first so country doesn't short-circuit)
-  if (geo.city && loc.includes(geo.city.toLowerCase())) {
-    return 1.4;
+  // City match (exact + aliases) → strongest signal
+  if (geo.city) {
+    const city = geo.city.toLowerCase();
+    if (loc.includes(city)) return 1.4;
+
+    // Check aliases for the user's city
+    const aliases = CITY_ALIASES[city];
+    if (aliases && aliases.some((a) => loc.includes(a))) return 1.4;
   }
 
   // Region/state match
@@ -65,14 +80,19 @@ function locationFit(resource: Resource, geo: GeoData): number {
     return 1.3;
   }
 
-  // Country match (by name or 2-letter code)
-  const countryCode = geo.countryCode.toLowerCase();
+  // Country match — use full name (more reliable than 2-letter codes which
+  // can false-match as substrings, e.g. "us" in "Houston")
   const countryName = geo.country.toLowerCase();
-  if (
-    (countryCode !== "xx" && loc.includes(countryCode)) ||
-    (countryName !== "unknown" && loc.includes(countryName))
-  ) {
+  if (countryName !== "unknown" && loc.includes(countryName)) {
     return 1.2;
+  }
+
+  // Country code — only match when it appears as a standalone token
+  // (e.g. "Berlin, DE" but not "Houston, US" matching "us" in "Houston")
+  const countryCode = geo.countryCode.toLowerCase();
+  if (countryCode !== "xx" && countryCode.length === 2) {
+    const codePattern = new RegExp(`\\b${countryCode}\\b`);
+    if (codePattern.test(loc)) return 1.2;
   }
 
   // Location-specific but doesn't match — still show, just reduced
@@ -207,8 +227,30 @@ function isLocalCategory(r: Resource): boolean {
   return r.category === "communities" || r.category === "events";
 }
 
+// ─── Remoteness Bonus ────────────────────────────────────────
+
+/**
+ * Compute a multiplier based on how few local resources the user has.
+ * Fewer nearby events/communities → higher bonus (the local card matters more).
+ */
+function remotenessBonus(resources: Resource[], geo: GeoData): number {
+  const nearbyCount = resources.filter(
+    (r) => isLocalCategory(r) && r.enabled && locationFit(r, geo) > 1.0
+  ).length;
+
+  // Only boost remote users — never penalize hubs.
+  // Since there's only ever one local card, there's no flooding risk.
+  if (nearbyCount === 0) return 1.4;
+  if (nearbyCount <= 2) return 1.2;
+  return 1.0;
+}
+
 // ─── Main Export ─────────────────────────────────────────────
 
+/**
+ * Rank non-local resources (letters, programs, other).
+ * Events and communities are excluded — they go into the local card instead.
+ */
 export function rankResources(
   resources: Resource[],
   answers: UserAnswers,
@@ -217,7 +259,10 @@ export function rankResources(
   maxResults: number = 6,
   minResults: number = 3
 ): ScoredResource[] {
-  const scored = resources.map((r) => scoreResource(r, answers, geo, variant));
+  // Only score non-local categories for the main list
+  const scored = resources
+    .filter((r) => !isLocalCategory(r))
+    .map((r) => scoreResource(r, answers, geo, variant));
 
   const regularPool = scored.filter(
     (s) => s.score > MIN_SCORE_THRESHOLD
@@ -242,29 +287,49 @@ export function rankResources(
 }
 
 /**
- * Find additional local communities/events that are good enough to show
- * as "stacked" extras behind a result that's already in the main list.
- * These are resources that scored well but were pushed out by the
- * similarity penalty (since we already picked one community/event).
+ * Build a single collapsed "local card" from all nearby events + communities.
+ *
+ * - The best nearby event or community becomes the anchor (events preferred).
+ * - A remoteness bonus scales the card's score — users in remote areas get a boost.
+ * - Remaining items that pass the threshold become expandable extras.
+ * - Returns null if nothing nearby passes the threshold.
  */
-export function getLocalExtras(
+export function buildLocalCard(
   resources: Resource[],
   answers: UserAnswers,
   geo: GeoData,
   variant: Variant,
-  selectedIds: Set<string>,
-  maxExtras: number = 4,
-): ScoredResource[] {
-  // Only look for local communities/events that aren't already shown
-  return resources
+  maxExtras: number = 6,
+): LocalCard | null {
+  // Only consider events/communities that are actually near the user
+  // (city, region, or country match — locationFit > 1.0).
+  // Global/online resources and anything far away are never shown here.
+  const scored = resources
     .filter((r) =>
-      r.enabled &&
-      !selectedIds.has(r.id) &&
       isLocalCategory(r) &&
-      locationFit(r, geo) > 1.0  // must actually be near the user
+      r.enabled &&
+      locationFit(r, geo) > 1.0
     )
     .map((r) => scoreResource(r, answers, geo, variant))
-    .filter((s) => s.score > MIN_SCORE_THRESHOLD)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxExtras);
+    .filter((s) => s.score > MIN_SCORE_THRESHOLD);
+
+  if (scored.length === 0) return null;
+
+  // Sort: events first (preferred over communities), then by score
+  scored.sort((a, b) => {
+    const aIsEvent = a.resource.category === "events" ? 1 : 0;
+    const bIsEvent = b.resource.category === "events" ? 1 : 0;
+    if (bIsEvent !== aIsEvent) return bIsEvent - aIsEvent;
+    return b.score - a.score;
+  });
+
+  const anchor = scored[0];
+  const extras = scored.slice(1, 1 + maxExtras);
+  const bonus = remotenessBonus(resources, geo);
+
+  return {
+    anchor,
+    extras,
+    score: anchor.score * bonus,
+  };
 }
