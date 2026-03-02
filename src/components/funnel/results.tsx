@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchResources, trackClick } from "@/lib/data";
-import { rankResources, getLocalExtras } from "@/lib/ranking";
+import { rankResources, buildLocalCard } from "@/lib/ranking";
 import { getGeoData } from "@/lib/geo";
 import {
   trackResultsViewed,
@@ -15,14 +15,14 @@ import type {
   Variant,
   GeoData,
   ScoredResource,
-  Resource,
+  LocalCard,
 } from "@/types";
 import { ResourceCard } from "@/components/results/resource-card";
 
-/** True if resource is a community or event (stackable category) */
-function isStackable(r: Resource): boolean {
-  return r.category === "communities" || r.category === "events";
-}
+/** A result item is either a normal scored resource or the local card */
+type ResultItem =
+  | { kind: "resource"; scored: ScoredResource }
+  | { kind: "local"; card: LocalCard };
 
 interface ResultsProps {
   variant: Variant;
@@ -30,8 +30,7 @@ interface ResultsProps {
 }
 
 export function Results({ variant, answers }: ResultsProps) {
-  const [results, setResults] = useState<ScoredResource[]>([]);
-  const [localExtras, setLocalExtras] = useState<ScoredResource[]>([]);
+  const [items, setItems] = useState<ResultItem[]>([]);
   const [geo, setGeo] = useState<GeoData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,8 +40,35 @@ export function Results({ variant, answers }: ResultsProps) {
       const geoData: GeoData = await getGeoData();
       setGeo(geoData);
 
+      // Rank non-local resources (letters, programs, other)
       const ranked = rankResources(resources, answers, geoData, variant);
-      setResults(ranked);
+
+      // Build the collapsed local card (events + communities)
+      const localCard = buildLocalCard(resources, answers, geoData, variant);
+
+      // Merge the local card into the ranked list at its scored position
+      const merged: ResultItem[] = ranked.map((scored) => ({
+        kind: "resource" as const,
+        scored,
+      }));
+
+      if (localCard) {
+        // Find where the local card's score fits in the sorted list
+        const insertIdx = merged.findIndex(
+          (item) =>
+            item.kind === "resource" && item.scored.score < localCard.score
+        );
+        const localItem: ResultItem = { kind: "local", card: localCard };
+
+        if (insertIdx === -1) {
+          // Lower than everything — append at end
+          merged.push(localItem);
+        } else {
+          merged.splice(insertIdx, 0, localItem);
+        }
+      }
+
+      setItems(merged);
 
       trackResultsViewed(
         variant,
@@ -50,12 +76,8 @@ export function Results({ variant, answers }: ResultsProps) {
         answers.intents || answers.intent,
         answers.positioned,
         answers.positionType,
-        ranked.length
+        merged.length
       );
-
-      const selectedIds = new Set(ranked.map((r) => r.resource.id));
-      const extras = getLocalExtras(resources, answers, geoData, variant, selectedIds);
-      setLocalExtras(extras);
 
       setLoading(false);
     }
@@ -68,26 +90,36 @@ export function Results({ variant, answers }: ResultsProps) {
       if (geo) {
         trackClick(resourceId, variant, answers, geo.countryCode);
 
-        const allResults = [...results, ...localExtras];
-        const scored = allResults.find((r) => r.resource.id === resourceId);
-        if (scored) {
+        // Find the resource across all items for richer tracking
+        let found: ScoredResource | undefined;
+        for (const item of items) {
+          if (item.kind === "resource" && item.scored.resource.id === resourceId) {
+            found = item.scored;
+            break;
+          }
+          if (item.kind === "local") {
+            if (item.card.anchor.resource.id === resourceId) {
+              found = item.card.anchor;
+              break;
+            }
+            found = item.card.extras.find((e) => e.resource.id === resourceId);
+            if (found) break;
+          }
+        }
+
+        if (found) {
           trackResourceClicked(
             resourceId,
-            scored.resource.title,
-            scored.resource.category,
+            found.resource.title,
+            found.resource.category,
             variant,
             position
           );
         }
       }
     },
-    [variant, geo, results, localExtras, answers]
+    [answers, variant, geo, items]
   );
-
-  const stackAnchorIndex = useMemo(() => {
-    if (localExtras.length === 0) return -1;
-    return results.findIndex((r) => isStackable(r.resource));
-  }, [results, localExtras]);
 
   if (loading) {
     return (
@@ -103,9 +135,8 @@ export function Results({ variant, answers }: ResultsProps) {
     );
   }
 
-  const isPositioned = answers?.positioned;
-  const primary = results[0];
-  const secondary = results.slice(1);
+  const primary = items[0];
+  const secondary = items.slice(1);
 
   return (
     <main className="min-h-dvh px-6 py-12">
@@ -132,22 +163,13 @@ export function Results({ variant, answers }: ResultsProps) {
             <p className="mb-3 text-xs font-medium uppercase tracking-wider text-accent">
               Your #1 action
             </p>
-            {stackAnchorIndex === 0 ? (
-              <StackedGroup
-                anchor={primary}
-                extras={localExtras}
-                variant={variant}
-                geo={geo}
-                onClickTrack={(id) => handleResourceClick(id, 0)}
-              />
-            ) : (
-              <ResourceCard
-                scored={primary}
-                variant={variant}
-                isPrimary
-                onClickTrack={(id) => handleResourceClick(id, 0)}
-              />
-            )}
+            <ResultItemRenderer
+              item={primary}
+              variant={variant}
+              geo={geo}
+              isPrimary
+              onClickTrack={(id) => handleResourceClick(id, 0)}
+            />
           </motion.div>
         )}
 
@@ -163,30 +185,24 @@ export function Results({ variant, answers }: ResultsProps) {
               Also check out
             </p>
             <div className="flex flex-col gap-3">
-              {secondary.map((scored, i) => {
-                const globalIndex = i + 1;
+              {secondary.map((item, i) => {
+                const key =
+                  item.kind === "resource"
+                    ? item.scored.resource.id
+                    : `local-card-${item.card.anchor.resource.id}`;
                 return (
                   <motion.div
-                    key={scored.resource.id}
+                    key={key}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6 + i * 0.1 }}
                   >
-                    {stackAnchorIndex === globalIndex ? (
-                      <StackedGroup
-                        anchor={scored}
-                        extras={localExtras}
-                        variant={variant}
-                        geo={geo}
-                        onClickTrack={(id) => handleResourceClick(id, globalIndex)}
-                      />
-                    ) : (
-                      <ResourceCard
-                        scored={scored}
-                        variant={variant}
-                        onClickTrack={(id) => handleResourceClick(id, globalIndex)}
-                      />
-                    )}
+                    <ResultItemRenderer
+                      item={item}
+                      variant={variant}
+                      geo={geo}
+                      onClickTrack={(id) => handleResourceClick(id, i + 1)}
+                    />
                   </motion.div>
                 );
               })}
@@ -197,6 +213,45 @@ export function Results({ variant, answers }: ResultsProps) {
         <div className="pb-8" />
       </div>
     </main>
+  );
+}
+
+// ─── Result Item Renderer ────────────────────────────────────
+
+interface ResultItemRendererProps {
+  item: ResultItem;
+  variant: Variant;
+  geo: GeoData | null;
+  isPrimary?: boolean;
+  onClickTrack: (resourceId: string) => void;
+}
+
+function ResultItemRenderer({
+  item,
+  variant,
+  geo,
+  isPrimary,
+  onClickTrack,
+}: ResultItemRendererProps) {
+  if (item.kind === "local") {
+    return (
+      <StackedGroup
+        anchor={item.card.anchor}
+        extras={item.card.extras}
+        variant={variant}
+        geo={geo}
+        onClickTrack={onClickTrack}
+      />
+    );
+  }
+
+  return (
+    <ResourceCard
+      scored={item.scored}
+      variant={variant}
+      isPrimary={isPrimary}
+      onClickTrack={(id) => onClickTrack(id)}
+    />
   );
 }
 
@@ -213,8 +268,13 @@ interface StackedGroupProps {
 function StackedGroup({ anchor, extras, variant, geo, onClickTrack }: StackedGroupProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const hasCommunities = extras.some((e) => e.resource.category === "communities");
-  const hasEvents = extras.some((e) => e.resource.category === "events");
+  // Build a label from what's actually in the extras
+  const hasCommunities =
+    anchor.resource.category === "communities" ||
+    extras.some((e) => e.resource.category === "communities");
+  const hasEvents =
+    anchor.resource.category === "events" ||
+    extras.some((e) => e.resource.category === "events");
   const label = hasCommunities && hasEvents
     ? "communities & events"
     : hasCommunities

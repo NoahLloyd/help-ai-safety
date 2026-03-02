@@ -111,6 +111,13 @@ export interface ScoredResource {
   matchReasons: string[];
 }
 
+/** Collapsed local card — one anchor + expandable extras for nearby events/communities */
+export interface LocalCard {
+  anchor: ScoredResource;
+  extras: ScoredResource[];
+  score: number;               // card's ranking score (anchor score * remoteness bonus)
+}
+
 // ─── Positioned Person ──────────────────────────────────────
 
 export type PositionTag =
