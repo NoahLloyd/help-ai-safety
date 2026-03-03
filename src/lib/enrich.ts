@@ -169,6 +169,176 @@ export async function githubLookup(url: string): Promise<{
   }
 }
 
+// ─── Social Media Scraper (X / Instagram / others) ──────────
+
+/** Fetch HTML using social‑media crawler UAs (same trick as LinkedIn scraper) */
+async function fetchWithCrawlerUA(url: string): Promise<string | null> {
+  const crawlerUAs = [
+    "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+    "Twitterbot/1.0",
+    "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)",
+  ];
+
+  for (const ua of crawlerUAs) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": ua,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (res.ok) {
+        const html = await res.text();
+        if (html.includes("og:title") || html.includes("og:description")) {
+          return html;
+        }
+      }
+    } catch {
+      // Try next UA
+    }
+  }
+
+  return null;
+}
+
+/** Scrape an X (Twitter) profile using crawler UAs to get OG tags */
+export async function scrapeXProfile(url: string): Promise<{
+  profile: EnrichedProfile | null;
+  usage: ApiUsageEntry;
+}> {
+  const usage: ApiUsageEntry = { provider: "scrape", endpoint: "x-scraper", estimated_cost_usd: 0 };
+
+  const normalized = url.match(/^https?:\/\//) ? url : `https://${url}`;
+
+  try {
+    const html = await fetchWithCrawlerUA(normalized);
+    if (!html) return { profile: null, usage };
+
+    const ogTitle = extractMeta(html, "og:title");
+    const ogDesc = extractMeta(html, "og:description") || extractMeta(html, "description");
+    const ogImage = extractMeta(html, "og:image");
+
+    // X og:title format: "Name (@handle) / X"
+    let fullName: string | undefined;
+    if (ogTitle) {
+      const nameMatch = ogTitle.match(/^(.+?)\s*\(@/);
+      fullName = nameMatch ? nameMatch[1].trim() : ogTitle.replace(/\s*[/|]\s*X$/, "").trim();
+    }
+
+    // Extract username from URL
+    const handleMatch = normalized.match(/(?:x\.com|twitter\.com)\/([^/?#]+)/i);
+    const handle = handleMatch ? `@${handleMatch[1]}` : undefined;
+
+    if (!fullName && !ogDesc) return { profile: null, usage };
+
+    return {
+      profile: {
+        fullName,
+        headline: ogDesc || undefined,
+        photo: ogImage || undefined,
+        summary: ogDesc || undefined,
+        skills: [],
+        experience: [],
+        education: [],
+        platform: "x",
+        sourceUrl: url,
+        ...(handle ? { currentTitle: handle } : {}),
+        fetchedAt: new Date().toISOString(),
+      },
+      usage,
+    };
+  } catch (err) {
+    console.error("[x-scraper] Error:", err);
+    return { profile: null, usage };
+  }
+}
+
+/** Scrape an Instagram profile using crawler UAs to get OG tags */
+export async function scrapeInstagramProfile(url: string): Promise<{
+  profile: EnrichedProfile | null;
+  usage: ApiUsageEntry;
+}> {
+  const usage: ApiUsageEntry = { provider: "scrape", endpoint: "instagram-scraper", estimated_cost_usd: 0 };
+
+  const normalized = url.match(/^https?:\/\//) ? url : `https://${url}`;
+
+  try {
+    const html = await fetchWithCrawlerUA(normalized);
+    if (!html) return { profile: null, usage };
+
+    const ogTitle = extractMeta(html, "og:title");
+    const ogDesc = extractMeta(html, "og:description") || extractMeta(html, "description");
+    const ogImage = extractMeta(html, "og:image");
+    const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
+
+    // Instagram og:title formats:
+    //   "Name (@handle) • Instagram photos and videos"
+    //   "@handle • Instagram photos and videos"
+    let fullName: string | undefined;
+    let handle: string | undefined;
+    if (ogTitle) {
+      const nameMatch = ogTitle.match(/^(.+?)\s*\(@(\w+)\)/);
+      if (nameMatch) {
+        fullName = nameMatch[1].trim();
+        handle = `@${nameMatch[2]}`;
+      } else {
+        const handleOnly = ogTitle.match(/^@(\w+)/);
+        if (handleOnly) {
+          handle = `@${handleOnly[1]}`;
+        } else {
+          // Fall back to title without the "• Instagram..." suffix
+          fullName = ogTitle.replace(/\s*[•·]\s*Instagram.*$/i, "").trim() || undefined;
+        }
+      }
+    }
+
+    // Also try extracting handle from URL
+    if (!handle) {
+      const urlMatch = normalized.match(/instagram\.com\/([^/?#]+)/i);
+      if (urlMatch && urlMatch[1] !== "p" && urlMatch[1] !== "reel") {
+        handle = `@${urlMatch[1]}`;
+      }
+    }
+
+    // og:description often has: "N Followers, N Following, N Posts - See Instagram photos..."
+    // or a bio snippet
+    let bio: string | undefined;
+    if (ogDesc) {
+      // Strip the stats prefix if present
+      const bioMatch = ogDesc.match(/\d+\s+Posts?\s*[-–]\s*(.+)/i);
+      bio = bioMatch ? bioMatch[1].trim() : ogDesc;
+      // Clean trailing "See Instagram photos..." boilerplate
+      bio = bio.replace(/\s*See Instagram photos.*$/i, "").trim() || undefined;
+    }
+
+    if (!fullName && !handle && !bio) return { profile: null, usage };
+
+    return {
+      profile: {
+        fullName: fullName || (handle ? handle.replace("@", "") : undefined),
+        headline: bio || undefined,
+        photo: ogImage || undefined,
+        summary: bio || undefined,
+        skills: [],
+        experience: [],
+        education: [],
+        platform: "instagram",
+        sourceUrl: url,
+        ...(handle ? { currentTitle: handle } : {}),
+        fetchedAt: new Date().toISOString(),
+      },
+      usage,
+    };
+  } catch (err) {
+    console.error("[instagram-scraper] Error:", err);
+    return { profile: null, usage };
+  }
+}
+
 // ─── Best-Effort Fetch (Other Platforms) ─────────────────────
 
 export async function bestEffortFetch(url: string): Promise<{
@@ -179,22 +349,26 @@ export async function bestEffortFetch(url: string): Promise<{
 
   try {
     const normalized = url.match(/^https?:\/\//) ? url : `https://${url}`;
-    const res = await fetch(normalized, {
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "text/html,application/xhtml+xml,*/*",
-      },
-    });
 
-    if (!res.ok) {
+    // Try crawler UAs first (works better for social media sites), fall back to browser UA
+    let html = await fetchWithCrawlerUA(normalized);
+    if (!html) {
+      const res = await fetch(normalized, {
+        signal: AbortSignal.timeout(10_000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Accept: "text/html,application/xhtml+xml,*/*",
+        },
+      });
+      if (res.ok) html = await res.text();
+    }
+
+    if (!html) {
       return {
         profile: { skills: [], experience: [], education: [], platform, sourceUrl: url, fetchedAt: new Date().toISOString() },
         usage: { provider: "scrape", endpoint: url, estimated_cost_usd: 0 },
       };
     }
-
-    const html = await res.text();
 
     // Extract basic metadata from HTML
     const ogTitle = extractMeta(html, "og:title");
@@ -224,6 +398,17 @@ export async function bestEffortFetch(url: string): Promise<{
   }
 }
 
+function decodeEntities(str: string): string {
+  return str
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 function extractMeta(html: string, property: string): string | undefined {
   const patterns = [
     new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']+)["']`, "i"),
@@ -231,7 +416,7 @@ function extractMeta(html: string, property: string): string | undefined {
   ];
   for (const rx of patterns) {
     const m = html.match(rx);
-    if (m?.[1]) return m[1].trim();
+    if (m?.[1]) return decodeEntities(m[1].trim());
   }
   return undefined;
 }

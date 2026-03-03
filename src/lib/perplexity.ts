@@ -37,6 +37,7 @@ function buildUsage(
 
 export async function searchPerson(query: string): Promise<{
   text: string | null;
+  citations: string[];
   usage: ApiUsageEntry;
 }> {
   const emptyUsage: ApiUsageEntry = {
@@ -47,7 +48,7 @@ export async function searchPerson(query: string): Promise<{
 
   const client = getClient();
   if (!client) {
-    return { text: null, usage: emptyUsage };
+    return { text: null, citations: [], usage: emptyUsage };
   }
 
   try {
@@ -68,13 +69,17 @@ export async function searchPerson(query: string): Promise<{
     const usage = buildUsage(response, "search-person");
     const text = response.choices[0]?.message?.content || "";
 
+    // Perplexity returns citations as a non-standard field on the response
+    const citations: string[] =
+      (response as unknown as { citations?: string[] }).citations ?? [];
+
     if (!text.trim()) {
-      return { text: null, usage };
+      return { text: null, citations: [], usage };
     }
 
-    return { text: text.trim(), usage };
+    return { text: text.trim(), citations, usage };
   } catch (err) {
     console.error("[perplexity] searchPerson failed:", err);
-    return { text: null, usage: emptyUsage };
+    return { text: null, citations: [], usage: emptyUsage };
   }
 }

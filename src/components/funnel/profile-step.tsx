@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { detectPlatform } from "@/lib/profile";
-import { ProfileConfirmation } from "@/components/funnel/profile-confirmation";
-import type { ProfilePlatform, EnrichedProfile } from "@/types";
+import type { ProfilePlatform } from "@/types";
 
 interface ProfileStepProps {
-  onSubmit: (url: string, platform: ProfilePlatform, profile?: EnrichedProfile, profileText?: string) => void;
+  onSubmit: (url: string, platform: ProfilePlatform, inputType: "linkedin" | "github" | "x" | "instagram" | "name" | "other_url", profileText?: string) => void;
   onSkip: () => void;
 }
 
-type Phase = "input" | "loading" | "confirm";
 type InputMode = "empty" | "url" | "text";
 
 // ─── Platform Config ────────────────────────────────────────
@@ -124,53 +122,22 @@ const hintAnim = {
 
 export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
   const [input, setInput] = useState("");
-  const [phase, setPhase] = useState<Phase>("input");
-  const [enrichedProfile, setEnrichedProfile] = useState<EnrichedProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loadingText, setLoadingText] = useState("Looking up your profile...");
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputMode = detectInputMode(input);
 
-  // ─── Enrichment ─────────────────────────────────────
+  // ─── Determine input type ───────────────────────────
 
-  const handleEnrich = useCallback(async (profileUrl: string) => {
-    const platform = detectPlatform(profileUrl);
-    setLoadingText("Looking up your profile...");
-    setPhase("loading");
-    setError(null);
-
-    try {
-      const res = await fetch("/api/enrich", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: profileUrl }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.profile) {
-          setEnrichedProfile(data.profile);
-          setPhase("confirm");
-          return;
-        }
-      }
-
-      setEnrichedProfile({
-        skills: [], experience: [], education: [],
-        platform, sourceUrl: profileUrl,
-        fetchedAt: new Date().toISOString(),
-      });
-      setPhase("confirm");
-    } catch {
-      setEnrichedProfile({
-        skills: [], experience: [], education: [],
-        platform: detectPlatform(profileUrl), sourceUrl: profileUrl,
-        fetchedAt: new Date().toISOString(),
-      });
-      setPhase("confirm");
-    }
-  }, []);
+  function getInputType(text: string): "linkedin" | "github" | "x" | "instagram" | "name" | "other_url" {
+    const platform = detectPlatform(text);
+    if (platform === "linkedin") return "linkedin";
+    if (platform === "github") return "github";
+    if (platform === "x") return "x";
+    if (platform === "instagram") return "instagram";
+    if (detectInputMode(text) === "url") return "other_url";
+    return "name";
+  }
 
   // ─── Auto-submit on URL paste ───────────────────────
 
@@ -178,7 +145,11 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
     const pasted = e.clipboardData.getData("text").trim();
     if (detectInputMode(pasted) === "url") {
       if (autoSubmitTimer.current) clearTimeout(autoSubmitTimer.current);
-      autoSubmitTimer.current = setTimeout(() => handleEnrich(pasted), 500);
+      autoSubmitTimer.current = setTimeout(() => {
+        const platform = detectPlatform(pasted);
+        const inputType = getInputType(pasted);
+        onSubmit(pasted, platform, inputType);
+      }, 500);
     }
   }
 
@@ -187,39 +158,10 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
   function handlePlatformLookup(platformKey: string) {
     const platform = PLATFORMS.find(p => p.key === platformKey);
     if (!platform) return;
-    handleEnrich(platform.buildUrl(toUsername(input)));
-  }
-
-  // ─── Name/text search (Perplexity placeholder) ──────
-
-  async function handleSearch() {
-    const query = input.trim();
-    setLoadingText(`Searching for "${query}"...`);
-    setPhase("loading");
-    setError(null);
-
-    try {
-      const res = await fetch("/api/search-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.text) {
-          // Go straight to results with the raw Perplexity text
-          onSubmit(query, "other", undefined, data.text);
-          return;
-        }
-      }
-
-      setError("Couldn't find information about this person. Try pasting a direct profile link instead.");
-      setPhase("input");
-    } catch {
-      setError("Search failed. Try pasting a profile link instead.");
-      setPhase("input");
-    }
+    const url = platform.buildUrl(toUsername(input));
+    const detectedPlatform = detectPlatform(url);
+    const inputType = getInputType(url);
+    onSubmit(url, detectedPlatform, inputType);
   }
 
   // ─── Main submit (Enter key / button) ───────────────
@@ -229,56 +171,13 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
     if (!t) return;
 
     if (detectInputMode(t) === "url") {
-      handleEnrich(t);
+      const platform = detectPlatform(t);
+      const inputType = getInputType(t);
+      onSubmit(t, platform, inputType);
     } else {
-      // For any non-URL text, search online
-      handleSearch();
+      // Name search — go to processing flow which will call Perplexity
+      onSubmit(t, "other", "name");
     }
-  }
-
-  // ─── Confirm ────────────────────────────────────────
-
-  function handleConfirm() {
-    if (!enrichedProfile) return;
-    const profileUrl = enrichedProfile.sourceUrl || input.trim();
-    const platform = enrichedProfile.platform;
-    const hasMeaningfulData = !!(
-      enrichedProfile.fullName ||
-      enrichedProfile.headline ||
-      enrichedProfile.currentTitle ||
-      enrichedProfile.skills.length > 0 ||
-      enrichedProfile.experience.length > 0
-    );
-    onSubmit(profileUrl, platform, hasMeaningfulData ? enrichedProfile : undefined);
-  }
-
-  // ─── Confirmation Screen ────────────────────────────
-
-  if (phase === "confirm" && enrichedProfile) {
-    return (
-      <ProfileConfirmation
-        profile={enrichedProfile}
-        onConfirm={handleConfirm}
-        onSkip={onSkip}
-      />
-    );
-  }
-
-  // ─── Loading Screen ─────────────────────────────────
-
-  if (phase === "loading") {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center px-6">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center gap-4 text-center"
-        >
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
-          <p className="text-sm text-muted-foreground">{loadingText}</p>
-        </motion.div>
-      </main>
-    );
   }
 
   // ─── Input Screen ───────────────────────────────────

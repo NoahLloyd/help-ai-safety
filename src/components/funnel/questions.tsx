@@ -12,7 +12,7 @@ import {
 import { QuestionCard } from "@/components/questions/question-card";
 import { ProfileStep } from "@/components/funnel/profile-step";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import type { Question, Variant, UserAnswers, IntentTag, PositionTag, ProfilePlatform, EnrichedProfile } from "@/types";
+import type { Question, Variant, UserAnswers, IntentTag, PositionTag, ProfilePlatform } from "@/types";
 
 interface QuestionsProps {
   variant: Variant;
@@ -67,13 +67,12 @@ export function Questions({ variant, answers: initialAnswers, isPositioned, onCo
     }
   }
 
-  function handleProfileSubmit(url: string, platform: ProfilePlatform, profile?: EnrichedProfile) {
+  function handleProfileSubmit(url: string, platform: ProfilePlatform, _inputType: "linkedin" | "github" | "x" | "instagram" | "name" | "other_url", _profileText?: string) {
     trackProfileProvided(platform, variant);
     const updatedAnswers: UserAnswers = {
       ...answers,
       profileUrl: url,
       profilePlatform: platform,
-      ...(profile ? { enrichedProfile: profile } : {}),
     };
     finish(updatedAnswers);
   }
