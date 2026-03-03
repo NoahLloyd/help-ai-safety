@@ -22,7 +22,7 @@ export async function scrapeLinkedInProfile(url: string): Promise<{
   const normalized = url.match(/^https?:\/\//) ? url : `https://${url}`;
 
   // Ensure it's actually a LinkedIn profile URL
-  if (!normalized.match(/^https?:\/\/([a-z]+\.)?linkedin\.com\/in\//i)) {
+  if (!normalized.match(/linkedin\.com\/in\//i)) {
     return { profile: null, usage };
   }
 
@@ -281,8 +281,9 @@ function extractJsonLd(html: string): JsonLdResult {
           const addr = item.address;
           result.location = typeof addr === "string"
             ? addr
-            : [addr.addressLocality, addr.addressRegion, addr.addressCountry]
-                .filter(Boolean).join(", ") || undefined;
+            : addr.addressLocality ||
+              [addr.addressLocality, addr.addressRegion, addr.addressCountry]
+                .filter(Boolean).join(", ");
         }
 
         // Current company (first worksFor with a name)

@@ -1,128 +1,179 @@
 import { posthog } from "./posthog";
-import type { Variant, TimeCommitment, IntentTag, PositionTag, ProfilePlatform } from "@/types";
+import type {
+  Variant,
+  TimeCommitment,
+  IntentTag,
+  PositionTag,
+  ProfilePlatform,
+} from "@/types";
+import { VARIANT_NAMES } from "@/types";
 
-/**
- * Track a pageview with the current URL and optional properties.
- * Call this in useEffect on each page.
- */
-export function trackPageView(properties?: Record<string, unknown>) {
-  posthog.capture("$pageview", properties);
+// ─── Helpers ────────────────────────────────────────────────
+
+function variantProps(variant: Variant) {
+  return { variant, variant_name: VARIANT_NAMES[variant] };
 }
 
-/**
- * User started the funnel (landed on the home page).
- */
+// ─── Funnel Events ──────────────────────────────────────────
+
+/** User started the funnel (landed on the home page). */
 export function trackFunnelStarted(variant: Variant) {
-  posthog.capture("funnel_started", { variant });
+  posthog.capture("funnel_started", variantProps(variant));
 }
 
-/**
- * User answered a question.
- */
+/** Variant was assigned to user (fired once on first assignment). */
+export function trackVariantAssigned(variant: Variant) {
+  posthog.capture("variant_assigned", variantProps(variant));
+}
+
+// ─── Question Events ────────────────────────────────────────
+
+/** User answered a question. */
 export function trackQuestionAnswered(
   questionId: string,
   answer: string | string[],
-  variant: Variant
+  variant: Variant,
+  questionIndex?: number,
+  timeToAnswerMs?: number
 ) {
   posthog.capture("question_answered", {
     question_id: questionId,
     answer,
-    variant,
+    ...variantProps(variant),
+    question_index: questionIndex,
+    time_to_answer_ms: timeToAnswerMs,
   });
 }
 
-/**
- * User skipped or abandoned a question (navigated away).
- * Best-effort — call on unmount if the question wasn't answered.
- */
+/** User skipped/abandoned a question. */
 export function trackQuestionSkipped(questionId: string, variant: Variant) {
   posthog.capture("question_skipped", {
     question_id: questionId,
-    variant,
+    ...variantProps(variant),
   });
 }
 
-/**
- * Results page loaded — user sees their recommendations.
- */
+// ─── Profile Events (Variant A) ─────────────────────────────
+
+/** User provided a profile link. */
+export function trackProfileProvided(platform: ProfilePlatform, variant: Variant) {
+  posthog.capture("profile_provided", {
+    platform,
+    ...variantProps(variant),
+  });
+  posthog.register({ has_profile: true });
+}
+
+/** User skipped the profile step. */
+export function trackProfileSkipped(variant: Variant) {
+  posthog.capture("profile_skipped", variantProps(variant));
+  posthog.register({ has_profile: false });
+}
+
+// ─── Results Events ─────────────────────────────────────────
+
+/** Results page loaded — user sees recommendations. */
 export function trackResultsViewed(
   variant: Variant,
   time: TimeCommitment,
   intent?: IntentTag | IntentTag[],
   positioned?: boolean,
   positionType?: PositionTag,
-  resultCount?: number
+  resultCount?: number,
+  resultSource?: "algorithmic" | "claude_personalized" | "browse",
+  timeToResultsMs?: number
 ) {
   posthog.capture("results_viewed", {
-    variant,
+    ...variantProps(variant),
     time,
     intent,
     positioned: positioned || false,
     position_type: positionType,
     result_count: resultCount,
+    result_source: resultSource || "algorithmic",
+    time_to_results_ms: timeToResultsMs,
   });
 }
 
-/**
- * User clicked a resource link (the conversion event).
- */
+/** User clicked a resource link (the conversion event). */
 export function trackResourceClicked(
   resourceId: string,
   resourceTitle: string,
   category: string,
   variant: Variant,
-  position: number // 0 = primary, 1+ = secondary
+  position: number,
+  timeSinceResultsMs?: number
 ) {
   posthog.capture("resource_clicked", {
     resource_id: resourceId,
     resource_title: resourceTitle,
     category,
-    variant,
+    ...variantProps(variant),
     position,
+    time_since_results_ms: timeSinceResultsMs,
   });
 }
 
-/**
- * User clicked "Start over" — restarting the funnel.
- */
+/** User clicked "Start over". */
 export function trackStartOver(variant: Variant) {
-  posthog.capture("start_over", { variant });
+  posthog.capture("start_over", variantProps(variant));
 }
 
-/**
- * User expanded the "more communities/events" stack.
- */
+/** User expanded the local card stack. */
 export function trackStackExpanded(variant: Variant, extraCount: number) {
-  posthog.capture("stack_expanded", { variant, extra_count: extraCount });
+  posthog.capture("stack_expanded", { ...variantProps(variant), extra_count: extraCount });
 }
 
-/**
- * Set user properties that persist across sessions.
- * Call once when we know the variant.
- */
+// ─── Browse Events (Variant B) ──────────────────────────────
+
+/** User changed a filter in browse mode. */
+export function trackBrowseFilterUsed(
+  variant: Variant,
+  filterType: "category" | "time" | "sort",
+  filterValue: string
+) {
+  posthog.capture("browse_filter_used", {
+    ...variantProps(variant),
+    filter_type: filterType,
+    filter_value: filterValue,
+  });
+}
+
+// ─── Engagement Events ──────────────────────────────────────
+
+/** Track scroll depth milestones (25%, 50%, 75%, 100%). */
+export function trackScrollDepth(variant: Variant, depth: number) {
+  posthog.capture("scroll_depth", {
+    ...variantProps(variant),
+    depth_percent: depth,
+  });
+}
+
+/** Track time from results load to first resource click. */
+export function trackTimeToFirstClick(variant: Variant, ms: number) {
+  posthog.capture("time_to_first_click", {
+    ...variantProps(variant),
+    time_ms: ms,
+  });
+}
+
+// ─── Super Properties ───────────────────────────────────────
+
+/** Set user properties that persist across sessions. */
 export function identifyVariant(variant: Variant) {
-  posthog.register({ variant });
+  posthog.register({
+    variant,
+    variant_name: VARIANT_NAMES[variant],
+  });
 }
 
-/**
- * User provided a profile link on the optional profile step.
- */
-export function trackProfileProvided(platform: ProfilePlatform, variant: Variant) {
-  posthog.capture("profile_provided", { platform, variant });
-}
-
-/**
- * User skipped the optional profile step.
- */
-export function trackProfileSkipped(variant: Variant) {
-  posthog.capture("profile_skipped", { variant });
-}
-
-/**
- * User landed via an affiliate/creator referral link (e.g. /rob).
- * Registers the ref as a super property so it sticks to every event.
- */
+/** User landed via an affiliate/creator referral link. */
 export function trackReferralLanded(ref: string) {
   posthog.register({ ref });
   posthog.capture("referral_landed", { ref });
+}
+
+/** Register geo data as a super property. */
+export function identifyGeo(countryCode: string) {
+  posthog.register({ geo_country: countryCode });
 }

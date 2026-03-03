@@ -11,6 +11,7 @@ import {
   trackStackExpanded,
 } from "@/lib/tracking";
 import { getUserId, upsertUser } from "@/lib/user";
+import { identifyGeo } from "@/lib/tracking";
 import type {
   Resource,
   UserAnswers,
@@ -25,7 +26,7 @@ import { LocationPicker } from "@/components/results/location-picker";
 
 /** A result item is either a normal scored resource or the local card */
 type ResultItem =
-  | { kind: "resource"; scored: ScoredResource; customTitle?: string; customDescription?: string }
+  | { kind: "resource"; scored: ScoredResource; customDescription?: string }
   | { kind: "local"; card: LocalCard | null };
 
 interface ResultsProps {
@@ -41,6 +42,7 @@ export function Results({ variant, answers }: ResultsProps) {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Finding the best ways you can help...");
   const localCardIndexRef = useRef<number | null>(null);
+  const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
     async function init() {
@@ -49,16 +51,17 @@ export function Results({ variant, answers }: ResultsProps) {
       setAllResources(resources);
       setGeo(geoData);
       setLocalGeo(geoData);
+      identifyGeo(geoData.countryCode);
 
-      const hasProfileData = !!answers.enrichedProfile || !!answers.profileUrl;
+      const hasProfile = !!answers.enrichedProfile || !!answers.profileUrl;
       let merged: ResultItem[];
+      let resultSource: "algorithmic" | "claude_personalized" = "algorithmic";
 
-      if (hasProfileData) {
-        // Claude-powered ranking — works with full profile or just a URL
+      if (hasProfile) {
         setLoadingMessage("Personalizing your recommendations...");
+        resultSource = "claude_personalized";
         merged = await computeClaudeRanking(resources, answers, geoData);
       } else {
-        // Algorithmic ranking (fallback — no profile at all)
         merged = computeAlgorithmicRanking(resources, answers, geoData, variant);
       }
 
@@ -78,10 +81,12 @@ export function Results({ variant, answers }: ResultsProps) {
       trackResultsViewed(
         variant,
         answers.time,
-        answers.intents || answers.intent,
+        answers.intent,
         answers.positioned,
         answers.positionType,
-        merged.length
+        merged.length,
+        resultSource,
+        Date.now() - startTimeRef.current
       );
 
       setLoading(false);
@@ -90,7 +95,7 @@ export function Results({ variant, answers }: ResultsProps) {
     init();
   }, [variant, answers]);
 
-  /** Use Claude to rank resources when we have an enriched profile */
+  /** Claude-powered ranking for Variant A with profile data */
   async function computeClaudeRanking(
     resources: Resource[],
     userAnswers: UserAnswers,
@@ -105,75 +110,45 @@ export function Results({ variant, answers }: ResultsProps) {
           profile: userAnswers.enrichedProfile,
           answers: userAnswers,
           geo: geoData,
-          resources,
-          userId: userId || undefined,
+          resources: resources.filter((r) => r.enabled),
+          userId,
         }),
       });
 
       if (!res.ok) throw new Error("Recommendation API failed");
 
       const data = await res.json();
-      const recommendations: RecommendedResource[] = data.recommendations || [];
+      const recs: RecommendedResource[] = data.recommendations || [];
 
-      // Save recommendations to user record
-      if (userId && recommendations.length > 0) {
-        upsertUser(userId, { last_recommendations: recommendations }).catch(() => {});
-      }
-
-      // Build result items from Claude's ranking
-      const resourceMap = new Map(resources.map((r) => [r.id, r]));
-      const pickedIds = new Set<string>();
-      const items: ResultItem[] = [];
-
-      for (const rec of recommendations) {
-        const resource = resourceMap.get(rec.resourceId);
+      // Map recommendations back to scored resources
+      const merged: ResultItem[] = [];
+      for (const rec of recs) {
+        const resource = resources.find((r) => r.id === rec.resourceId);
         if (!resource) continue;
-        pickedIds.add(rec.resourceId);
-
-        items.push({
+        merged.push({
           kind: "resource",
-          scored: {
-            resource,
-            score: 1 - rec.rank / recommendations.length,
-            matchReasons: [rec.description],
-          },
-          customTitle: rec.title,
+          scored: { resource, score: 1 / rec.rank, matchReasons: [] },
           customDescription: rec.description,
         });
       }
 
-      // Build a local card from remaining events/communities Claude didn't pick
-      const remainingLocal = resources.filter(
-        (r) => !pickedIds.has(r.id) && (r.category === "events" || r.category === "communities")
-      );
-      const localCard = remainingLocal.length > 0
-        ? buildLocalCard(remainingLocal, userAnswers, geoData, variant)
-        : null;
-
-      const localItem: ResultItem = { kind: "local", card: localCard };
-
+      // Add local card
+      const localCard = buildLocalCard(resources, userAnswers, geoData, variant);
       if (localCard) {
-        // Insert after Claude's picked event/community, or at the end
-        const eventIdx = items.findIndex(
-          (i) => i.kind === "resource" &&
-            (i.scored.resource.category === "events" || i.scored.resource.category === "communities")
-        );
-        const insertAt = eventIdx >= 0 ? eventIdx + 1 : items.length;
-        localCardIndexRef.current = insertAt;
-        items.splice(insertAt, 0, localItem);
-      } else {
-        localCardIndexRef.current = items.length;
-        items.push(localItem);
+        localCardIndexRef.current = merged.length;
+        merged.push({ kind: "local", card: localCard });
       }
 
-      return items;
-    } catch {
-      // Fall back to algorithmic ranking
+      return merged.length > 0
+        ? merged
+        : computeAlgorithmicRanking(resources, userAnswers, geoData, variant);
+    } catch (err) {
+      console.error("[results] Claude ranking failed, falling back:", err);
       return computeAlgorithmicRanking(resources, userAnswers, geoData, variant);
     }
   }
 
-  /** Standard algorithmic ranking (no profile) */
+  /** Standard algorithmic ranking */
   function computeAlgorithmicRanking(
     resources: Resource[],
     userAnswers: UserAnswers,
@@ -269,10 +244,9 @@ export function Results({ variant, answers }: ResultsProps) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex flex-col items-center gap-4 text-center"
+          className="text-muted-foreground"
         >
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
-          <p className="text-muted-foreground">{loadingMessage}</p>
+          {loadingMessage}
         </motion.div>
       </main>
     );
@@ -397,8 +371,6 @@ function ResultItemRenderer({
       scored={item.scored}
       variant={variant}
       isPrimary={isPrimary}
-      customTitle={item.customTitle}
-      customDescription={item.customDescription}
       onClickTrack={(id) => onClickTrack(id)}
     />
   );

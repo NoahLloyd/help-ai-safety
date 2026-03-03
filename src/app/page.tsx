@@ -7,20 +7,30 @@ import { getVariant, setVariant as persistVariant } from "@/lib/variants";
 import {
   trackFunnelStarted,
   trackQuestionAnswered,
+  trackProfileProvided,
+  trackProfileSkipped,
   identifyVariant,
 } from "@/lib/tracking";
 import { Questions } from "@/components/funnel/questions";
 import { Results } from "@/components/funnel/results";
-import type { Variant, TimeCommitment, UserAnswers } from "@/types";
+import { BrowseResults } from "@/components/funnel/browse-results";
+import { ProfileStep } from "@/components/funnel/profile-step";
+import type {
+  Variant,
+  TimeCommitment,
+  UserAnswers,
+  ProfilePlatform,
+  EnrichedProfile,
+} from "@/types";
 
 type Step = "home" | "questions" | "results";
 
-const VARIANTS: Variant[] = ["A", "B", "D"];
+const VARIANTS: Variant[] = ["A", "B", "C"];
 
 export default function Home() {
-  const [variant, setVariantState] = useState<Variant>("A");
+  const [variant, setVariantState] = useState<Variant>("C");
   const [step, setStep] = useState<Step>("home");
-  const [answers, setAnswers] = useState<UserAnswers>({ time: "minutes" });
+  const [answers, setAnswers] = useState<UserAnswers>({ time: "significant" });
   const [isPositioned, setIsPositioned] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
 
@@ -37,10 +47,7 @@ export default function Home() {
       setStep(prevStep);
     }
     window.addEventListener("popstate", onPopState);
-
-    // Seed the initial history entry so we have something to pop back to
     history.replaceState({ step: "home" }, "");
-
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
@@ -55,14 +62,53 @@ export default function Home() {
     setVariantState(v);
     persistVariant(v);
     identifyVariant(v);
+    // Reset to home on variant change
+    setStep("home");
+    setAnswers({ time: "significant" });
+    setIsPositioned(false);
+    setSelectedOption(null);
   }
 
-  function handleSelect(optionId: string) {
+  // ─── Variant A: Profile submission ────────────────────────
+
+  function handleProfileSubmit(
+    url: string,
+    platform: ProfilePlatform,
+    profile?: EnrichedProfile
+  ) {
+    trackProfileProvided(platform, variant);
+    const newAnswers: UserAnswers = {
+      time: "significant",
+      profileUrl: url,
+      profilePlatform: platform,
+      ...(profile ? { enrichedProfile: profile } : {}),
+    };
+    setAnswers(newAnswers);
+    sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
+    sessionStorage.setItem("hdih_variant", variant);
+    goTo("results");
+  }
+
+  function handleProfileSkip() {
+    trackProfileSkipped(variant);
+    const newAnswers: UserAnswers = { time: "significant" };
+    setAnswers(newAnswers);
+    sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
+    sessionStorage.setItem("hdih_variant", variant);
+    goTo("results");
+  }
+
+  // ─── Variant C: Q1 answer handler ────────────────────────
+
+  function handleQ1Select(optionId: string) {
     setSelectedOption(optionId);
-    trackQuestionAnswered("readiness", optionId, variant);
+    trackQuestionAnswered("readiness", optionId, variant, 0);
 
     if (optionId === "positioned") {
-      const newAnswers = { time: "significant" as TimeCommitment, positioned: true };
+      const newAnswers = {
+        time: "significant" as TimeCommitment,
+        positioned: true,
+      };
       setAnswers(newAnswers);
       setIsPositioned(true);
       sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
@@ -75,114 +121,172 @@ export default function Home() {
       setIsPositioned(false);
       sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
       sessionStorage.setItem("hdih_variant", variant);
-
-      if (variant === "A") {
-        goTo("results");
-      } else {
-        goTo("questions");
-      }
+      goTo("questions");
     }
   }
 
-  const handleQuestionsComplete = useCallback((finalAnswers: UserAnswers) => {
-    setAnswers(finalAnswers);
-    goTo("results");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleQuestionsComplete = useCallback(
+    (finalAnswers: UserAnswers) => {
+      setAnswers(finalAnswers);
+      goTo("results");
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    []
+  );
+
+  // ─── Sub-page renders ────────────────────────────────────
 
   if (step === "questions") {
     return (
-      <Questions
-        variant={variant}
-        answers={answers}
-        isPositioned={isPositioned}
-        onComplete={handleQuestionsComplete}
-      />
+      <>
+        <Questions
+          variant={variant}
+          answers={answers}
+          isPositioned={isPositioned}
+          onComplete={handleQuestionsComplete}
+        />
+        <VariantSelector
+          variant={variant}
+          onVariantChange={handleVariantChange}
+        />
+      </>
     );
   }
 
   if (step === "results") {
     return (
-      <Results
-        variant={variant}
-        answers={answers}
-      />
+      <>
+        <Results variant={variant} answers={answers} />
+        <VariantSelector
+          variant={variant}
+          onVariantChange={handleVariantChange}
+        />
+      </>
     );
   }
 
+  // ─── Home: render based on variant ───────────────────────
+
+  // Variant B: Browse — straight to browsable results
+  if (variant === "B") {
+    return (
+      <>
+        <BrowseResults variant={variant} />
+        <VariantSelector
+          variant={variant}
+          onVariantChange={handleVariantChange}
+        />
+      </>
+    );
+  }
+
+  // Variant A: Profile — inviting header + profile input
+  if (variant === "A") {
+    return (
+      <>
+        <ProfileStep
+          onSubmit={handleProfileSubmit}
+          onSkip={handleProfileSkip}
+        />
+        <VariantSelector
+          variant={variant}
+          onVariantChange={handleVariantChange}
+        />
+      </>
+    );
+  }
+
+  // Variant C: Guided — Q1 is the landing page
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-6">
-      <motion.div
-        className="flex max-w-lg flex-col items-center text-center"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          You want to help.
-        </h1>
-
-        <motion.p
-          className="mt-4 text-lg leading-relaxed text-muted-foreground sm:text-xl"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-        >
-          A few quick questions, then we&apos;ll point you in the right direction.
-        </motion.p>
-
+    <>
+      <main className="flex min-h-dvh flex-col items-center justify-center px-6">
         <motion.div
-          className="mt-10 w-full"
-          initial={{ opacity: 0, y: 10 }}
+          className="flex max-w-lg flex-col items-center text-center"
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.5 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {questionOne.question}
-          </h2>
+          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+            You want to help.
+          </h1>
 
-          <div className="mt-6 flex flex-col gap-3">
-            {questionOne.options.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => handleSelect(option.id)}
-                className={`w-full rounded-xl border px-4 py-4 text-left transition-all hover:border-accent/50 hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                  selectedOption === option.id
-                    ? "border-accent bg-accent/10"
-                    : "border-border bg-card"
-                }`}
-              >
-                <span className="block text-base font-medium">
-                  {option.label}
-                </span>
-              </button>
-            ))}
-          </div>
+          <motion.p
+            className="mt-4 text-lg leading-relaxed text-muted-foreground sm:text-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+          >
+            A few quick questions, then we&apos;ll find the best ways for
+            you to help with AI safety.
+          </motion.p>
+
+          <motion.div
+            className="mt-10 w-full"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+          >
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              {questionOne.question}
+            </h2>
+
+            <div className="mt-6 flex flex-col gap-3">
+              {questionOne.options.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => handleQ1Select(option.id)}
+                  className={`w-full rounded-xl border px-4 py-4 text-left transition-all hover:border-accent/50 hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    selectedOption === option.id
+                      ? "border-accent bg-accent/10"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  <span className="block text-base font-medium">
+                    {option.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      </main>
+      <VariantSelector
+        variant={variant}
+        onVariantChange={handleVariantChange}
+      />
+    </>
+  );
+}
 
-      {/* Variant selector */}
-      <motion.div
-        className="fixed bottom-4 right-4 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
-      >
+// ─── Variant Selector ───────────────────────────────────────
+
+function VariantSelector({
+  variant,
+  onVariantChange,
+}: {
+  variant: Variant;
+  onVariantChange: (v: Variant) => void;
+}) {
+  return (
+    <div className="group fixed bottom-4 right-4 z-50">
+      {/* Tiny dot — visible at rest */}
+      <div className="h-2 w-2 rounded-full bg-muted-foreground/20 transition-opacity group-hover:opacity-0" />
+
+      {/* Full selector — visible on hover */}
+      <div className="pointer-events-none absolute bottom-0 right-0 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
         <span>Variant:</span>
         {VARIANTS.map((v) => (
           <button
             key={v}
-            onClick={() => handleVariantChange(v)}
+            onClick={() => onVariantChange(v)}
             className={`rounded px-2 py-1 font-medium transition-colors ${
-              variant === v
-                ? "bg-accent text-white"
-                : "hover:bg-card-hover"
+              variant === v ? "bg-accent text-white" : "hover:bg-card-hover"
             }`}
           >
             {v}
           </button>
         ))}
-      </motion.div>
-    </main>
+      </div>
+    </div>
   );
 }

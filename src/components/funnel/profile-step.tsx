@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { detectPlatform } from "@/lib/profile";
 import { ProfileConfirmation } from "@/components/funnel/profile-confirmation";
@@ -54,20 +54,12 @@ function detectInputMode(text: string): InputMode {
   return "text";
 }
 
-/** Does the text look like a person's name? (capitalized words with spaces) */
+/** Does the text look like a full name? (multiple words with spaces) */
 function looksLikeName(text: string): boolean {
   const t = text.trim();
   if (!t.includes(" ")) return false;
   const words = t.split(/\s+/);
-  // At least 2 words, most start with uppercase
-  return words.length >= 2 && words.filter(w => /^[A-Z]/.test(w)).length >= 2;
-}
-
-/** Is the name short/generic enough to benefit from extra context? */
-function isGenericName(text: string): boolean {
-  const words = text.trim().split(/\s+/);
-  // 2-3 word names with no extra context like job/company
-  return words.length <= 3 && words.every(w => /^[A-Z][a-z]+$/.test(w));
+  return words.length >= 2;
 }
 
 /** Clean raw input into a usable username slug */
@@ -137,13 +129,6 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
   const [error, setError] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState("Looking up your profile...");
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Clean up auto-submit timer on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSubmitTimer.current) clearTimeout(autoSubmitTimer.current);
-    };
-  }, []);
 
   const inputMode = detectInputMode(input);
 
@@ -303,17 +288,29 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
     <main className="flex min-h-dvh flex-col px-6 py-12">
       <div className="mx-auto w-full max-w-lg">
         <motion.div
-          initial={{ opacity: 0, x: 40 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            You want to help.
+          </h1>
+
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+            Share your background and we&apos;ll find the most impactful ways
+            for <em>you</em> to contribute to AI safety.
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.4 }}
+        >
+          <h2 className="mt-8 text-xl font-semibold tracking-tight sm:text-2xl">
             Link your profile
           </h2>
 
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Use your public profile to personalize recommendations
-          </p>
 
           {error && (
             <p className="mt-3 text-sm text-rose-500">{error}</p>
@@ -331,7 +328,7 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && hasInput) handleSubmit();
               }}
-              placeholder="Your name, profile link, or username..."
+              placeholder="Your full name, social handle or any URL"
               autoFocus
               className="w-full rounded-xl border border-border bg-card px-4 py-4 text-base outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
             />
@@ -342,7 +339,7 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
             <AnimatePresence mode="wait">
               {inputMode === "empty" && (
                 <motion.div key="empty" {...hintAnim} className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span className="mr-1">Find your profile on</span>
+                  <span className="mr-1">Copy profile link from</span>
                   {PLATFORMS.map((p) => (
                     <a
                       key={p.key}
@@ -363,17 +360,12 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
                   {looksLikeName(input) ? (
                     <>
                       <p className="text-sm text-muted-foreground">
-                        We&apos;ll search for your profile online
+                        We&apos;ll look you up online. Add your company or job title if you have a common name
                       </p>
-                      {isGenericName(input) && (
-                        <p className="text-xs text-muted">
-                          Common name? Add your company or job title for better results
-                        </p>
-                      )}
                     </>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                      <span className="mr-1">Try on</span>
+                      <span className="mr-1">Try this social handle on</span>
                       {PLATFORMS.map((p) => (
                         <button
                           key={p.key}
@@ -402,7 +394,7 @@ export function ProfileStep({ onSubmit, onSkip }: ProfileStepProps) {
               onClick={onSkip}
               className="text-sm text-muted transition-colors hover:text-foreground"
             >
-              Skip
+              Skip, just show me everything
             </button>
 
             <button

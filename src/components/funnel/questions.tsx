@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getQuestionsForVariant, questionPositioned } from "@/data/questions";
+import { questionPositioned, questionTwo } from "@/data/questions";
 import {
   trackQuestionAnswered,
   trackQuestionSkipped,
@@ -26,17 +26,19 @@ export function Questions({ variant, answers: initialAnswers, isPositioned, onCo
   const [answers, setAnswers] = useState<UserAnswers>(initialAnswers);
   const [showProfileStep, setShowProfileStep] = useState(false);
   const answeredRef = useRef(false);
+  const questionStartRef = useRef(Date.now());
 
-  // Variant A has no Q2 — go straight to results
-  useEffect(() => {
-    if (!isPositioned && variant === "A") {
-      onComplete(initialAnswers);
-    }
-  }, [variant, isPositioned, initialAnswers, onComplete]);
+  // Build question sequence — only used by Variant C
+  // If positioned: position_type → intent
+  // Otherwise: just intent (Q1 readiness was already answered on the home page)
+  const questions: Question[] = isPositioned
+    ? [questionPositioned, questionTwo]
+    : [questionTwo];
 
   // Track skipped question on unmount if user didn't answer
   useEffect(() => {
     answeredRef.current = false;
+    questionStartRef.current = Date.now();
     return () => {
       if (!answeredRef.current && questions[currentIndex]) {
         trackQuestionSkipped(questions[currentIndex].id, variant);
@@ -44,17 +46,6 @@ export function Questions({ variant, answers: initialAnswers, isPositioned, onCo
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex]);
-
-  // Build question sequence
-  let questions: Question[];
-  if (isPositioned) {
-    const variantQuestions = getQuestionsForVariant(variant);
-    const variantQ2 = variantQuestions.filter((q) => q.id !== "readiness" && q.id !== "time");
-    questions = [questionPositioned, ...variantQ2];
-  } else {
-    const allQuestions = getQuestionsForVariant(variant);
-    questions = allQuestions.filter((q) => q.id !== "readiness" && q.id !== "time");
-  }
 
   const currentQuestion = questions[currentIndex];
   const isLast = currentIndex === questions.length - 1;
@@ -94,9 +85,10 @@ export function Questions({ variant, answers: initialAnswers, isPositioned, onCo
 
   function handleSelect(questionId: string, optionId: string) {
     answeredRef.current = true;
+    const timeToAnswer = Date.now() - questionStartRef.current;
 
     if (questionId === "position_type") {
-      trackQuestionAnswered(questionId, optionId, variant);
+      trackQuestionAnswered(questionId, optionId, variant, currentIndex + 1, timeToAnswer);
       const updatedAnswers = {
         ...answers,
         positioned: true,
@@ -111,7 +103,7 @@ export function Questions({ variant, answers: initialAnswers, isPositioned, onCo
         setCurrentIndex((prev) => prev + 1);
       }
     } else if (questionId === "intent") {
-      trackQuestionAnswered(questionId, optionId, variant);
+      trackQuestionAnswered(questionId, optionId, variant, currentIndex + 1, timeToAnswer);
       const updatedAnswers = { ...answers, intent: optionId as IntentTag };
       setAnswers(updatedAnswers);
 

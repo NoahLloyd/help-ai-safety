@@ -1,7 +1,7 @@
 import { Variant } from "@/types";
 
 const VARIANT_COOKIE = "hdih_variant";
-const VARIANTS: Variant[] = ["A", "B", "D"];
+const VARIANTS: Variant[] = ["A", "B", "C"];
 
 /**
  * Get or assign a variant for this visitor.

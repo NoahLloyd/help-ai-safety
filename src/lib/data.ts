@@ -52,7 +52,7 @@ export async function trackClick(
       resource_id: resourceId,
       variant,
       user_time: answers.time,
-      user_intents: answers.intents || (answers.intent ? [answers.intent] : []),
+      user_intents: answers.intent ? [answers.intent] : [],
       geo_country: geoCountry || null,
     });
   } catch {

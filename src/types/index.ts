@@ -1,6 +1,12 @@
 // ─── Variants ───────────────────────────────────────────────
 
-export type Variant = "A" | "B" | "D";
+export type Variant = "A" | "B" | "C";
+
+export const VARIANT_NAMES: Record<Variant, string> = {
+  A: "Profile",
+  B: "Browse",
+  C: "Guided",
+};
 
 // ─── Questions ──────────────────────────────────────────────
 
@@ -30,13 +36,12 @@ export interface Question {
 
 export interface UserAnswers {
   time: TimeCommitment;
-  intents?: IntentTag[];    // Legacy (unused)
-  intent?: IntentTag;       // Single-select intent
-  positioned?: boolean;     // True if user chose "uniquely positioned"
-  positionType?: PositionTag; // What kind of position they have
-  profileUrl?: string;      // Optional public profile URL
-  profilePlatform?: ProfilePlatform; // Detected platform from profileUrl
-  enrichedProfile?: EnrichedProfile; // Full profile from enrichment API
+  intent?: IntentTag;
+  positioned?: boolean;
+  positionType?: PositionTag;
+  profileUrl?: string;
+  profilePlatform?: ProfilePlatform;
+  enrichedProfile?: EnrichedProfile;
 }
 
 export interface GeoData {
@@ -60,50 +65,41 @@ export type ResourceCategory =
 export type ResourceStatus = "approved" | "pending" | "rejected";
 
 export interface Resource {
-  id: string;                // auto-generated, hidden from UI
+  id: string;
   title: string;
   description: string;
   url: string;
   source_org: string;
 
-  // Categorization
   category: ResourceCategory;
-  location: string;          // "Global", "New York, USA", "Online", "US"
+  location: string;
 
-  // Time
   min_minutes: number;
 
-  // Scoring — admin-only, never shown publicly
-  ev_general: number;        // 0–1  expected impact for a random person
-  ev_positioned?: number;    // 0–1  expected impact if particularly suited
-  friction: number;          // 0 = one click, 1 = life change
+  ev_general: number;
+  ev_positioned?: number;
+  friction: number;
 
-  // Status
-  enabled: boolean;          // single on/off toggle
-  status: ResourceStatus;    // approved / pending / rejected
+  enabled: boolean;
+  status: ResourceStatus;
 
-  // Category-specific (optional)
-  event_date?: string;       // ISO date — events only
-  event_type?: string;       // "Talk" | "Meetup" | "Course" etc.
-  deadline_date?: string;    // ISO date — programs with deadlines
+  event_date?: string;
+  event_type?: string;
+  deadline_date?: string;
 
-  // Submission
-  created_at: string;        // ISO timestamp
-  submitted_by?: string;     // name/email from public submissions
+  created_at: string;
+  submitted_by?: string;
 
-  // Tags — for positioned-person ranking funnel
   background_tags?: string[];
   position_tags?: string[];
 
-  // Sync — tracks where imported resources came from
-  source?: string;       // "ea-forum" | "aisafety" | "pauseai" | "lesswrong" | "manual"
-  source_id?: string;    // external ID from upstream, for re-matching on sync
+  source?: string;
+  source_id?: string;
 
-  // Verification — automated checks + admin overrides
-  verified_at?: string;        // ISO timestamp of last verification run
-  url_status?: string;         // "reachable" | "dead" | "redirect" | "unknown"
-  activity_score?: number;     // 0–1, higher = more active/real community
-  verification_notes?: string; // human-readable notes from last verification
+  verified_at?: string;
+  url_status?: string;
+  activity_score?: number;
+  verification_notes?: string;
 }
 
 // ─── Ranking ────────────────────────────────────────────────
@@ -114,11 +110,10 @@ export interface ScoredResource {
   matchReasons: string[];
 }
 
-/** Collapsed local card — one anchor + expandable extras for nearby events/communities */
 export interface LocalCard {
   anchor: ScoredResource;
   extras: ScoredResource[];
-  score: number;               // card's ranking score (anchor score * remoteness bonus)
+  score: number;
 }
 
 // ─── Positioned Person ──────────────────────────────────────
@@ -184,10 +179,8 @@ export interface EnrichedProfile {
   sourceUrl?: string;
   linkedinUrl?: string;
   email?: string;
-  // GitHub-specific
   repos?: ProfileRepo[];
   followers?: number;
-  // Metadata
   fetchedAt: string;
 }
 
@@ -196,8 +189,8 @@ export interface EnrichedProfile {
 export interface RecommendedResource {
   resourceId: string;
   rank: number;
-  description: string;  // Personalized 1-2 sentence description tailored to the user
-  title?: string;        // Optional custom title — omitted if default is fine
+  description: string;
+  title?: string;
 }
 
 // ─── API Usage ──────────────────────────────────────────────
