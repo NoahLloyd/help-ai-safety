@@ -32,19 +32,33 @@ type ResultItem =
 interface ResultsProps {
   variant: Variant;
   answers: UserAnswers;
+  /** Pre-computed items from ProcessingFlow (Variant A) — skips init when provided */
+  precomputedItems?: ResultItem[];
+  /** Pre-computed geo from ProcessingFlow */
+  precomputedGeo?: GeoData;
 }
 
-export function Results({ variant, answers }: ResultsProps) {
-  const [items, setItems] = useState<ResultItem[]>([]);
-  const [geo, setGeo] = useState<GeoData | null>(null);
-  const [localGeo, setLocalGeo] = useState<GeoData | null>(null);
+export function Results({ variant, answers, precomputedItems, precomputedGeo }: ResultsProps) {
+  const [items, setItems] = useState<ResultItem[]>(precomputedItems ?? []);
+  const [geo, setGeo] = useState<GeoData | null>(precomputedGeo ?? null);
+  const [localGeo, setLocalGeo] = useState<GeoData | null>(precomputedGeo ?? null);
   const [allResources, setAllResources] = useState<Resource[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState("Finding the best ways you can help...");
+  const [loading, setLoading] = useState(!precomputedItems);
   const localCardIndexRef = useRef<number | null>(null);
   const startTimeRef = useRef(Date.now());
 
+  // When precomputed items are provided, find the local card index
   useEffect(() => {
+    if (precomputedItems) {
+      const idx = precomputedItems.findIndex((item) => item.kind === "local");
+      localCardIndexRef.current = idx >= 0 ? idx : null;
+    }
+  }, [precomputedItems]);
+
+  useEffect(() => {
+    // Skip init when precomputed items are provided (Variant A processing flow)
+    if (precomputedItems) return;
+
     async function init() {
       const resources = await fetchResources();
       const geoData: GeoData = await getGeoData();
@@ -58,7 +72,6 @@ export function Results({ variant, answers }: ResultsProps) {
       let resultSource: "algorithmic" | "claude_personalized" = "algorithmic";
 
       if (hasProfile) {
-        setLoadingMessage("Personalizing your recommendations...");
         resultSource = "claude_personalized";
         merged = await computeClaudeRanking(resources, answers, geoData);
       } else {
@@ -93,7 +106,7 @@ export function Results({ variant, answers }: ResultsProps) {
     }
 
     init();
-  }, [variant, answers]);
+  }, [variant, answers, precomputedItems]);
 
   /** Claude-powered ranking for Variant A with profile data */
   async function computeClaudeRanking(
@@ -246,7 +259,7 @@ export function Results({ variant, answers }: ResultsProps) {
           animate={{ opacity: 1 }}
           className="text-muted-foreground"
         >
-          {loadingMessage}
+          Finding the best ways you can help...
         </motion.div>
       </main>
     );
@@ -371,6 +384,7 @@ function ResultItemRenderer({
       scored={item.scored}
       variant={variant}
       isPrimary={isPrimary}
+      customDescription={item.customDescription}
       onClickTrack={(id) => onClickTrack(id)}
     />
   );

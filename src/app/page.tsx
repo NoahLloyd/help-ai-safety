@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { questionOne } from "@/data/questions";
 import { getVariant, setVariant as persistVariant } from "@/lib/variants";
@@ -15,15 +15,17 @@ import { Questions } from "@/components/funnel/questions";
 import { Results } from "@/components/funnel/results";
 import { BrowseResults } from "@/components/funnel/browse-results";
 import { ProfileStep } from "@/components/funnel/profile-step";
+import { ProcessingFlow } from "@/components/funnel/processing-flow";
+import type { ResultItem } from "@/components/funnel/processing-flow";
 import type {
   Variant,
   TimeCommitment,
   UserAnswers,
   ProfilePlatform,
-  EnrichedProfile,
+  GeoData,
 } from "@/types";
 
-type Step = "home" | "questions" | "results";
+type Step = "home" | "questions" | "processing" | "results";
 
 const VARIANTS: Variant[] = ["A", "B", "C"];
 
@@ -33,6 +35,14 @@ export default function Home() {
   const [answers, setAnswers] = useState<UserAnswers>({ time: "significant" });
   const [isPositioned, setIsPositioned] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+
+  // Processing flow state
+  const [processingInput, setProcessingInput] = useState("");
+  const [processingInputType, setProcessingInputType] = useState<"linkedin" | "github" | "x" | "instagram" | "name" | "other_url">("linkedin");
+  const [processingPlatform, setProcessingPlatform] = useState<ProfilePlatform>("other");
+  const [processingProfileText, setProcessingProfileText] = useState<string | undefined>();
+  const [precomputedItems, setPrecomputedItems] = useState<ResultItem[] | null>(null);
+  const [precomputedGeo, setPrecomputedGeo] = useState<GeoData | null>(null);
 
   // Push a virtual history entry when advancing steps
   function goTo(nextStep: Step) {
@@ -67,6 +77,8 @@ export default function Home() {
     setAnswers({ time: "significant" });
     setIsPositioned(false);
     setSelectedOption(null);
+    setPrecomputedItems(null);
+    setPrecomputedGeo(null);
   }
 
   // ─── Variant A: Profile submission ────────────────────────
@@ -74,19 +86,26 @@ export default function Home() {
   function handleProfileSubmit(
     url: string,
     platform: ProfilePlatform,
-    profile?: EnrichedProfile,
+    inputType: "linkedin" | "github" | "x" | "instagram" | "name" | "other_url",
     profileText?: string,
   ) {
     trackProfileProvided(platform, variant);
-    const newAnswers: UserAnswers = {
-      time: "significant",
-      profileUrl: url,
-      profilePlatform: platform,
-      ...(profile ? { enrichedProfile: profile } : {}),
-      ...(profileText ? { profileText } : {}),
-    };
-    setAnswers(newAnswers);
-    sessionStorage.setItem("hdih_answers", JSON.stringify(newAnswers));
+    setProcessingInput(url);
+    setProcessingInputType(inputType);
+    setProcessingPlatform(platform);
+    setProcessingProfileText(profileText);
+    goTo("processing");
+  }
+
+  function handleProcessingComplete(
+    items: ResultItem[],
+    geo: GeoData,
+    finalAnswers: UserAnswers,
+  ) {
+    setPrecomputedItems(items);
+    setPrecomputedGeo(geo);
+    setAnswers(finalAnswers);
+    sessionStorage.setItem("hdih_answers", JSON.stringify(finalAnswers));
     sessionStorage.setItem("hdih_variant", variant);
     goTo("results");
   }
@@ -155,10 +174,34 @@ export default function Home() {
     );
   }
 
+  if (step === "processing") {
+    return (
+      <>
+        <ProcessingFlow
+          input={processingInput}
+          inputType={processingInputType}
+          platform={processingPlatform}
+          variant={variant}
+          profileText={processingProfileText}
+          onComplete={handleProcessingComplete}
+        />
+        <VariantSelector
+          variant={variant}
+          onVariantChange={handleVariantChange}
+        />
+      </>
+    );
+  }
+
   if (step === "results") {
     return (
       <>
-        <Results variant={variant} answers={answers} />
+        <Results
+          variant={variant}
+          answers={answers}
+          precomputedItems={precomputedItems ?? undefined}
+          precomputedGeo={precomputedGeo ?? undefined}
+        />
         <VariantSelector
           variant={variant}
           onVariantChange={handleVariantChange}

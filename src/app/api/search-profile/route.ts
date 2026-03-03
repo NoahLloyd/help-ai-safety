@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const { text, usage } = await searchPerson(query.trim());
+    const { text, citations, usage } = await searchPerson(query.trim());
 
     // Log usage
     const supabase = getSupabase();
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ text });
+    return NextResponse.json({ text, citations });
   } catch {
     return NextResponse.json({ text: null, error: "Invalid request" }, { status: 400 });
   }
