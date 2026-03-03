@@ -1,6 +1,12 @@
 // ─── Variants ───────────────────────────────────────────────
 
-export type Variant = "A" | "B" | "D";
+export type Variant = "A" | "B" | "C";
+
+export const VARIANT_NAMES: Record<Variant, string> = {
+  A: "Profile",
+  B: "Browse",
+  C: "Guided",
+};
 
 // ─── Questions ──────────────────────────────────────────────
 
@@ -30,10 +36,12 @@ export interface Question {
 
 export interface UserAnswers {
   time: TimeCommitment;
-  intents?: IntentTag[];    // Variant B (multi-select)
-  intent?: IntentTag;       // Variant D (single-select)
-  positioned?: boolean;     // True if user chose "uniquely positioned"
-  positionType?: PositionTag; // What kind of position they have
+  intent?: IntentTag;
+  positioned?: boolean;
+  positionType?: PositionTag;
+  profileUrl?: string;
+  profilePlatform?: ProfilePlatform;
+  enrichedProfile?: EnrichedProfile;
 }
 
 export interface GeoData {
@@ -57,50 +65,41 @@ export type ResourceCategory =
 export type ResourceStatus = "approved" | "pending" | "rejected";
 
 export interface Resource {
-  id: string;                // auto-generated, hidden from UI
+  id: string;
   title: string;
   description: string;
   url: string;
   source_org: string;
 
-  // Categorization
   category: ResourceCategory;
-  location: string;          // "Global", "New York, USA", "Online", "US"
+  location: string;
 
-  // Time
   min_minutes: number;
 
-  // Scoring — admin-only, never shown publicly
-  ev_general: number;        // 0–1  expected impact for a random person
-  ev_positioned?: number;    // 0–1  expected impact if particularly suited
-  friction: number;          // 0 = one click, 1 = life change
+  ev_general: number;
+  ev_positioned?: number;
+  friction: number;
 
-  // Status
-  enabled: boolean;          // single on/off toggle
-  status: ResourceStatus;    // approved / pending / rejected
+  enabled: boolean;
+  status: ResourceStatus;
 
-  // Category-specific (optional)
-  event_date?: string;       // ISO date — events only
-  event_type?: string;       // "Talk" | "Meetup" | "Course" etc.
-  deadline_date?: string;    // ISO date — programs with deadlines
+  event_date?: string;
+  event_type?: string;
+  deadline_date?: string;
 
-  // Submission
-  created_at: string;        // ISO timestamp
-  submitted_by?: string;     // name/email from public submissions
+  created_at: string;
+  submitted_by?: string;
 
-  // Tags — for positioned-person ranking funnel
   background_tags?: string[];
   position_tags?: string[];
 
-  // Sync — tracks where imported resources came from
-  source?: string;       // "ea-forum" | "aisafety" | "pauseai" | "lesswrong" | "manual"
-  source_id?: string;    // external ID from upstream, for re-matching on sync
+  source?: string;
+  source_id?: string;
 
-  // Verification — automated checks + admin overrides
-  verified_at?: string;        // ISO timestamp of last verification run
-  url_status?: string;         // "reachable" | "dead" | "redirect" | "unknown"
-  activity_score?: number;     // 0–1, higher = more active/real community
-  verification_notes?: string; // human-readable notes from last verification
+  verified_at?: string;
+  url_status?: string;
+  activity_score?: number;
+  verification_notes?: string;
 }
 
 // ─── Ranking ────────────────────────────────────────────────
@@ -111,11 +110,10 @@ export interface ScoredResource {
   matchReasons: string[];
 }
 
-/** Collapsed local card — one anchor + expandable extras for nearby events/communities */
 export interface LocalCard {
   anchor: ScoredResource;
   extras: ScoredResource[];
-  score: number;               // card's ranking score (anchor score * remoteness bonus)
+  score: number;
 }
 
 // ─── Positioned Person ──────────────────────────────────────
@@ -127,3 +125,84 @@ export type PositionTag =
   | "donor"
   | "student"
   | "other";
+
+// ─── Profile ────────────────────────────────────────────────
+
+export type ProfilePlatform =
+  | "linkedin"
+  | "github"
+  | "x"
+  | "instagram"
+  | "facebook"
+  | "personal_website"
+  | "other";
+
+// ─── Enriched Profile ───────────────────────────────────────
+
+export interface ProfileExperience {
+  title: string;
+  company: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+}
+
+export interface ProfileEducation {
+  school: string;
+  degree?: string;
+  field?: string;
+  startYear?: number;
+  endYear?: number;
+  description?: string;
+  activities?: string;
+}
+
+export interface ProfileRepo {
+  name: string;
+  description?: string;
+  stars: number;
+  language?: string;
+}
+
+export interface EnrichedProfile {
+  fullName?: string;
+  headline?: string;
+  currentTitle?: string;
+  currentCompany?: string;
+  location?: string;
+  photo?: string;
+  summary?: string;
+  skills: string[];
+  experience: ProfileExperience[];
+  education: ProfileEducation[];
+  platform: ProfilePlatform;
+  sourceUrl?: string;
+  linkedinUrl?: string;
+  email?: string;
+  repos?: ProfileRepo[];
+  followers?: number;
+  fetchedAt: string;
+}
+
+// ─── Claude Recommendations ─────────────────────────────────
+
+export interface RecommendedResource {
+  resourceId: string;
+  rank: number;
+  description: string;
+  title?: string;
+}
+
+// ─── API Usage ──────────────────────────────────────────────
+
+export interface ApiUsageEntry {
+  id?: number;
+  provider: "claude" | "openai" | "github" | "scrape";
+  model?: string;
+  endpoint?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  estimated_cost_usd?: number;
+  user_id?: string;
+  created_at?: string;
+}

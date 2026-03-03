@@ -113,14 +113,11 @@ function typeFit(
   variant: Variant,
   answers: UserAnswers
 ): number {
-  if (variant === "A") return 1.0;
+  // Variant A (Profile) and B (Browse) don't have intent answers
+  if (variant === "A" || variant === "B") return 1.0;
 
-  if (variant === "B" && answers.intents && answers.intents.length > 0) {
-    const cats = answers.intents.flatMap((i) => INTENT_TO_CATEGORIES[i]);
-    return cats.includes(resource.category) ? 1.3 : 1.0;
-  }
-
-  if (variant === "D" && answers.intent) {
+  // Variant C (Guided) uses the intent answer for category boosting
+  if (variant === "C" && answers.intent) {
     const cats = INTENT_TO_CATEGORIES[answers.intent];
     return cats.includes(resource.category) ? 1.3 : 0.7;
   }

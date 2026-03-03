@@ -1,9 +1,8 @@
 import { Question, Variant } from "@/types";
 
 /**
- * Q1 is shared across all variants.
- * Reframed to focus on readiness level rather than time.
- * The "positioned" option triggers a follow-up question.
+ * Q1 — readiness/time commitment.
+ * Used by Variant C as the landing question.
  */
 export const questionOne: Question = {
   id: "readiness",
@@ -59,35 +58,9 @@ export const questionPositioned: Question = {
 };
 
 /**
- * Variant B: urgency-based Q2
+ * Q2 — intent. Used by Variant C after Q1.
  */
-export const questionTwoB: Question = {
-  id: "intent",
-  question: "What's driving you right now?",
-  options: [
-    {
-      id: "understand",
-      label: "I just learned something alarming",
-    },
-    {
-      id: "connect",
-      label: "I feel alone in caring about this",
-    },
-    {
-      id: "impact",
-      label: "I'm ready to act, just tell me where",
-    },
-    {
-      id: "do_part",
-      label: "Someone I trust pointed me here",
-    },
-  ],
-};
-
-/**
- * Variant D: intent-based Q2
- */
-export const questionTwoD: Question = {
+export const questionTwo: Question = {
   id: "intent",
   question: "What would help you most right now?",
   options: [
@@ -112,14 +85,16 @@ export const questionTwoD: Question = {
 
 /**
  * Get the question sequence for a given variant.
+ * A and B have no questions (profile step and browse, respectively).
+ * C has the full guided flow.
  */
 export function getQuestionsForVariant(variant: Variant): Question[] {
   switch (variant) {
     case "A":
-      return [questionOne];
+      return [];
     case "B":
-      return [questionOne, questionTwoB];
-    case "D":
-      return [questionOne, questionTwoD];
+      return [];
+    case "C":
+      return [questionOne, questionTwo];
   }
 }

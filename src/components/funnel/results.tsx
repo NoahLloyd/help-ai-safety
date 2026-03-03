@@ -10,6 +10,8 @@ import {
   trackResourceClicked,
   trackStackExpanded,
 } from "@/lib/tracking";
+import { getUserId, upsertUser } from "@/lib/user";
+import { identifyGeo } from "@/lib/tracking";
 import type {
   Resource,
   UserAnswers,
@@ -17,13 +19,14 @@ import type {
   GeoData,
   ScoredResource,
   LocalCard,
+  RecommendedResource,
 } from "@/types";
 import { ResourceCard } from "@/components/results/resource-card";
 import { LocationPicker } from "@/components/results/location-picker";
 
 /** A result item is either a normal scored resource or the local card */
 type ResultItem =
-  | { kind: "resource"; scored: ScoredResource }
+  | { kind: "resource"; scored: ScoredResource; customDescription?: string }
   | { kind: "local"; card: LocalCard | null };
 
 interface ResultsProps {
@@ -37,7 +40,9 @@ export function Results({ variant, answers }: ResultsProps) {
   const [localGeo, setLocalGeo] = useState<GeoData | null>(null);
   const [allResources, setAllResources] = useState<Resource[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState("Finding the best ways you can help...");
   const localCardIndexRef = useRef<number | null>(null);
+  const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
     async function init() {
@@ -46,46 +51,42 @@ export function Results({ variant, answers }: ResultsProps) {
       setAllResources(resources);
       setGeo(geoData);
       setLocalGeo(geoData);
+      identifyGeo(geoData.countryCode);
 
-      // Rank non-local resources
-      const ranked = rankResources(resources, answers, geoData, variant);
-      const localCard = buildLocalCard(resources, answers, geoData, variant);
+      const hasProfile = !!answers.enrichedProfile || !!answers.profileUrl;
+      let merged: ResultItem[];
+      let resultSource: "algorithmic" | "claude_personalized" = "algorithmic";
 
-      const merged: ResultItem[] = ranked.map((scored) => ({
-        kind: "resource" as const,
-        scored,
-      }));
-
-      // Always insert a local card slot (even if null content initially)
-      const localItem: ResultItem = { kind: "local", card: localCard };
-
-      if (localCard) {
-        const insertIdx = merged.findIndex(
-          (item) =>
-            item.kind === "resource" && item.scored.score < localCard.score
-        );
-        if (insertIdx === -1) {
-          localCardIndexRef.current = merged.length;
-          merged.push(localItem);
-        } else {
-          localCardIndexRef.current = insertIdx;
-          merged.splice(insertIdx, 0, localItem);
-        }
+      if (hasProfile) {
+        setLoadingMessage("Personalizing your recommendations...");
+        resultSource = "claude_personalized";
+        merged = await computeClaudeRanking(resources, answers, geoData);
       } else {
-        // No local results — append at end
-        localCardIndexRef.current = merged.length;
-        merged.push(localItem);
+        merged = computeAlgorithmicRanking(resources, answers, geoData, variant);
       }
 
       setItems(merged);
 
+      // Persist user data
+      const userId = getUserId();
+      if (userId) {
+        upsertUser(userId, {
+          ...(answers.enrichedProfile ? { profile_data: answers.enrichedProfile } : {}),
+          ...(answers.profilePlatform ? { profile_platform: answers.profilePlatform } : {}),
+          ...(answers.profileUrl ? { profile_url: answers.profileUrl } : {}),
+          answers,
+        }).catch(() => {});
+      }
+
       trackResultsViewed(
         variant,
         answers.time,
-        answers.intents || answers.intent,
+        answers.intent,
         answers.positioned,
         answers.positionType,
-        merged.length
+        merged.length,
+        resultSource,
+        Date.now() - startTimeRef.current
       );
 
       setLoading(false);
@@ -93,6 +94,96 @@ export function Results({ variant, answers }: ResultsProps) {
 
     init();
   }, [variant, answers]);
+
+  /** Claude-powered ranking for Variant A with profile data */
+  async function computeClaudeRanking(
+    resources: Resource[],
+    userAnswers: UserAnswers,
+    geoData: GeoData
+  ): Promise<ResultItem[]> {
+    try {
+      const userId = getUserId();
+      const res = await fetch("/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile: userAnswers.enrichedProfile,
+          answers: userAnswers,
+          geo: geoData,
+          resources: resources.filter((r) => r.enabled),
+          userId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Recommendation API failed");
+
+      const data = await res.json();
+      const recs: RecommendedResource[] = data.recommendations || [];
+
+      // Map recommendations back to scored resources
+      const merged: ResultItem[] = [];
+      for (const rec of recs) {
+        const resource = resources.find((r) => r.id === rec.resourceId);
+        if (!resource) continue;
+        merged.push({
+          kind: "resource",
+          scored: { resource, score: 1 / rec.rank, matchReasons: [] },
+          customDescription: rec.description,
+        });
+      }
+
+      // Add local card
+      const localCard = buildLocalCard(resources, userAnswers, geoData, variant);
+      if (localCard) {
+        localCardIndexRef.current = merged.length;
+        merged.push({ kind: "local", card: localCard });
+      }
+
+      return merged.length > 0
+        ? merged
+        : computeAlgorithmicRanking(resources, userAnswers, geoData, variant);
+    } catch (err) {
+      console.error("[results] Claude ranking failed, falling back:", err);
+      return computeAlgorithmicRanking(resources, userAnswers, geoData, variant);
+    }
+  }
+
+  /** Standard algorithmic ranking */
+  function computeAlgorithmicRanking(
+    resources: Resource[],
+    userAnswers: UserAnswers,
+    geoData: GeoData,
+    v: Variant
+  ): ResultItem[] {
+    const ranked = rankResources(resources, userAnswers, geoData, v);
+    const localCard = buildLocalCard(resources, userAnswers, geoData, v);
+
+    const merged: ResultItem[] = ranked.map((scored) => ({
+      kind: "resource" as const,
+      scored,
+    }));
+
+    const localItem: ResultItem = { kind: "local", card: localCard };
+
+    if (localCard) {
+      const insertIdx = merged.findIndex(
+        (item) =>
+          item.kind === "resource" && item.scored.score < localCard.score
+      );
+      if (insertIdx === -1) {
+        localCardIndexRef.current = merged.length;
+        merged.push(localItem);
+      } else {
+        localCardIndexRef.current = insertIdx;
+        merged.splice(insertIdx, 0, localItem);
+      }
+    } else {
+      localCardIndexRef.current = merged.length;
+      merged.push(localItem);
+    }
+
+    return merged;
+  }
 
   // Re-rank only the local card when the user picks a new location
   const handleLocationChange = useCallback(
@@ -155,7 +246,7 @@ export function Results({ variant, answers }: ResultsProps) {
           animate={{ opacity: 1 }}
           className="text-muted-foreground"
         >
-          Finding the best ways you can help...
+          {loadingMessage}
         </motion.div>
       </main>
     );
