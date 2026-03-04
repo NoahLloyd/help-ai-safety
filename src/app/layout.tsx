@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { PostHogProvider } from "@/components/providers/posthog-provider";
 import "./globals.css";
 
@@ -68,6 +69,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <PostHogProvider>{children}</PostHogProvider>
         </Suspense>
+        <Analytics />
       </body>
     </html>
   );
