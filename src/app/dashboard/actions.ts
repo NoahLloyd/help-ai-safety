@@ -1,6 +1,7 @@
 "use server";
 
 import { createAuthClient } from "@/lib/supabase-server";
+import type { CreatorFlowStep, CreatorPageData } from "@/types";
 
 // ─── Auth Helper ─────────────────────────────────────────────
 
@@ -145,6 +146,112 @@ export async function saveGuideSettings(
     await supabase
       .from("profiles")
       .update({ role: "guide" })
+      .eq("id", user.id);
+  }
+}
+
+// ─── Creator Pages ──────────────────────────────────────────
+
+const RESERVED_SLUGS = new Set([
+  "dashboard", "admin", "auth", "api", "about", "guides", "events",
+  "communities", "programs", "letters", "submit", "developers",
+  "positioned", "profile", "browse", "questions",
+]);
+
+export async function getCreatorPage(): Promise<CreatorPageData | null> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from("creator_pages")
+    .select("*")
+    .eq("creator_id", user.id)
+    .single();
+
+  if (error || !data) return null;
+  return data as CreatorPageData;
+}
+
+export async function checkSlugAvailable(slug: string): Promise<{ available: boolean; reason?: string }> {
+  if (!slug || slug.length < 2) {
+    return { available: false, reason: "Slug must be at least 2 characters" };
+  }
+  if (slug.length > 40) {
+    return { available: false, reason: "Slug must be 40 characters or less" };
+  }
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) {
+    return { available: false, reason: "Only lowercase letters, numbers, and hyphens allowed" };
+  }
+  if (RESERVED_SLUGS.has(slug)) {
+    return { available: false, reason: "This URL is reserved" };
+  }
+
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data } = await supabase
+    .from("creator_pages")
+    .select("id, creator_id")
+    .eq("slug", slug)
+    .single();
+
+  if (data && data.creator_id !== user.id) {
+    return { available: false, reason: "This URL is already taken" };
+  }
+
+  return { available: true };
+}
+
+export async function saveCreatorPage(page: {
+  slug: string;
+  status: "draft" | "active" | "paused";
+  flow_config: CreatorFlowStep[];
+  excluded_resources: string[];
+  boosted_resources: string[];
+  resource_weights: Record<string, number>;
+}): Promise<void> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Check if user already has a creator page
+  const { data: existing } = await supabase
+    .from("creator_pages")
+    .select("id")
+    .eq("creator_id", user.id)
+    .single();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("creator_pages")
+      .update({
+        slug: page.slug,
+        status: page.status,
+        flow_config: page.flow_config,
+        excluded_resources: page.excluded_resources,
+        boosted_resources: page.boosted_resources,
+        resource_weights: page.resource_weights,
+      })
+      .eq("id", existing.id);
+
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("creator_pages")
+      .insert({
+        creator_id: user.id,
+        slug: page.slug,
+        status: page.status,
+        flow_config: page.flow_config,
+        excluded_resources: page.excluded_resources,
+        boosted_resources: page.boosted_resources,
+        resource_weights: page.resource_weights,
+      });
+
+    if (error) throw new Error(error.message);
+  }
+
+  // Update profile role to creator if going active
+  if (page.status === "active") {
+    await supabase
+      .from("profiles")
+      .update({ role: "creator" })
       .eq("id", user.id);
   }
 }
