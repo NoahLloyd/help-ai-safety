@@ -5,10 +5,111 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = "howdoihelp.ai <noreply@howdoihelp.ai>";
 
 function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
-    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
-  }
   return process.env.NEXT_PUBLIC_SITE_URL || "https://howdoihelp.ai";
+}
+
+// ─── Brand Constants ────────────────────────────────────────
+
+const BRAND = {
+  green: "#0D9373",
+  greenHover: "#0B7D62",
+  darkBg: "#0a2e23",
+  darkBgAlt: "#0d3d2e",
+  foreground: "#1A1A2E",
+  muted: "#7A7A8E",
+  mutedFg: "#4A4A5E",
+  warmBg: "#FAF8F5",
+  card: "#FFFFFF",
+  border: "#E2DFD9",
+};
+
+// ─── Shared Layout ──────────────────────────────────────────
+
+function emailLayout(content: string): string {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin: 0; padding: 0; background: ${BRAND.warmBg}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: ${BRAND.warmBg};">
+    <tr>
+      <td align="center" style="padding: 40px 16px;">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width: 520px; width: 100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${BRAND.darkBg}, ${BRAND.darkBgAlt}); border-radius: 16px 16px 0 0; padding: 28px 32px;">
+              <a href="https://howdoihelp.ai" style="text-decoration: none; display: inline-flex; align-items: center;">
+                <img src="https://howdoihelp.ai/icon.png" alt="" width="28" height="28" style="border-radius: 6px; display: block;" />
+                <span style="margin-left: 10px; font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.75); letter-spacing: -0.01em;">howdoihelp.ai</span>
+              </a>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="background: ${BRAND.card}; padding: 36px 32px; border-left: 1px solid ${BRAND.border}; border-right: 1px solid ${BRAND.border};">
+              ${content}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background: ${BRAND.card}; padding: 0 32px 28px; border-left: 1px solid ${BRAND.border}; border-right: 1px solid ${BRAND.border}; border-bottom: 1px solid ${BRAND.border}; border-radius: 0 0 16px 16px;">
+              <div style="border-top: 1px solid ${BRAND.border}; padding-top: 20px;">
+                <p style="font-size: 12px; color: ${BRAND.muted}; margin: 0; line-height: 1.5;">
+                  Sent by <a href="https://howdoihelp.ai" style="color: ${BRAND.green}; text-decoration: none;">howdoihelp.ai</a> &mdash; connecting people with AI safety guides
+                </p>
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function primaryButton(href: string, label: string): string {
+  return `<a href="${href}" style="display: inline-block; background: ${BRAND.green}; color: white; padding: 13px 36px; border-radius: 10px; text-decoration: none; font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">${label}</a>`;
+}
+
+function secondaryButton(href: string, label: string): string {
+  return `<a href="${href}" style="display: inline-block; color: ${BRAND.muted}; padding: 13px 20px; text-decoration: none; font-size: 14px; font-weight: 500;">${label}</a>`;
+}
+
+// ─── Magic Link Sign-In ─────────────────────────────────────
+
+export async function sendMagicLinkEmail(
+  email: string,
+  actionLink: string
+): Promise<void> {
+  const content = `
+    <h1 style="font-size: 21px; font-weight: 600; color: ${BRAND.foreground}; margin: 0 0 8px 0; letter-spacing: -0.02em;">
+      Sign in to your account
+    </h1>
+
+    <p style="font-size: 15px; color: ${BRAND.mutedFg}; line-height: 1.6; margin: 0 0 28px 0;">
+      Click below to sign in. This link will expire in 1 hour.
+    </p>
+
+    <div style="text-align: center; margin: 28px 0 32px;">
+      ${primaryButton(actionLink, "Sign in")}
+    </div>
+
+    <p style="font-size: 13px; color: ${BRAND.muted}; line-height: 1.5; margin: 0;">
+      If you didn't request this, you can safely ignore this email.
+    </p>
+  `;
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: email,
+    subject: "Sign in to howdoihelp.ai",
+    html: emailLayout(content),
+  });
 }
 
 // ─── Guide Request Notification ─────────────────────────────
@@ -36,43 +137,47 @@ export async function sendGuideRequestNotification({
   const approveUrl = `${base}/guide-request/${approvalToken}?action=approve`;
   const declineUrl = `${base}/guide-request/${approvalToken}?action=decline`;
 
+  const messageBlock = message
+    ? `
+    <div style="background: ${BRAND.warmBg}; border: 1px solid ${BRAND.border}; border-radius: 12px; padding: 16px 20px; margin: 20px 0;">
+      <p style="font-size: 12px; color: ${BRAND.muted}; margin: 0 0 6px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Their message</p>
+      <p style="font-size: 14px; color: ${BRAND.foreground}; line-height: 1.6; margin: 0; white-space: pre-wrap;">${message}</p>
+    </div>
+    `
+    : "";
+
+  const content = `
+    <p style="font-size: 15px; color: ${BRAND.foreground}; margin: 0 0 20px 0;">
+      Hi ${guideName.split(" ")[0]},
+    </p>
+
+    <p style="font-size: 15px; color: ${BRAND.mutedFg}; line-height: 1.6; margin: 0 0 4px 0;">
+      <strong style="color: ${BRAND.foreground};">${requesterName}</strong> would like to book a call with you.
+    </p>
+
+    <p style="font-size: 14px; color: ${BRAND.muted}; margin: 0 0 16px 0;">
+      ${requesterEmail} &middot; <a href="${requesterProfileLink}" style="color: ${BRAND.green}; text-decoration: none; font-weight: 500;">View profile</a>
+    </p>
+
+    ${messageBlock}
+
+    <div style="text-align: center; margin: 28px 0 8px;">
+      ${primaryButton(approveUrl, "Approve &amp; share booking link")}
+    </div>
+    <div style="text-align: center; margin: 0 0 24px;">
+      ${secondaryButton(declineUrl, "Decline")}
+    </div>
+
+    <p style="font-size: 13px; color: ${BRAND.muted}; line-height: 1.5; margin: 0;">
+      When you approve, we'll send ${requesterName} your booking link so they can schedule a time.
+    </p>
+  `;
+
   await resend.emails.send({
     from: FROM_EMAIL,
     to: guideEmail,
     subject: `${requesterName} wants to talk with you on howdoihelp.ai`,
-    html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-        <p style="font-size: 16px; color: #1a1a1a;">Hi ${guideName.split(" ")[0]},</p>
-
-        <p style="font-size: 15px; color: #333; line-height: 1.6;">
-          <strong>${requesterName}</strong> (${requesterEmail}) would like to book a call with you through howdoihelp.ai.
-        </p>
-
-        <p style="font-size: 14px; margin: 12px 0;">
-          <a href="${requesterProfileLink}" style="color: #6366f1; text-decoration: none; font-weight: 500;">View their profile</a>
-        </p>
-
-        ${message ? `
-        <div style="background: #f5f5f5; border-radius: 12px; padding: 16px 20px; margin: 20px 0;">
-          <p style="font-size: 13px; color: #666; margin: 0 0 4px 0; font-weight: 600;">Their message:</p>
-          <p style="font-size: 14px; color: #333; line-height: 1.5; margin: 0; white-space: pre-wrap;">${message}</p>
-        </div>
-        ` : ""}
-
-        <div style="margin: 28px 0; text-align: center;">
-          <a href="${approveUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; margin-right: 12px;">
-            Approve &amp; share my booking link
-          </a>
-          <a href="${declineUrl}" style="display: inline-block; color: #888; padding: 12px 16px; text-decoration: none; font-size: 14px;">
-            Decline
-          </a>
-        </div>
-
-        <p style="font-size: 13px; color: #999; margin-top: 32px;">
-          When you approve, we'll send ${requesterName} your booking link so they can schedule a call.
-        </p>
-      </div>
-    `,
+    html: emailLayout(content),
   });
 }
 
@@ -93,28 +198,28 @@ export async function sendCalendarLinkToRequester({
   guideHeadline,
   calendarLink,
 }: CalendarLinkEmail): Promise<void> {
+  const content = `
+    <p style="font-size: 15px; color: ${BRAND.foreground}; margin: 0 0 20px 0;">
+      Hi ${requesterName.split(" ")[0]},
+    </p>
+
+    <p style="font-size: 15px; color: ${BRAND.mutedFg}; line-height: 1.6; margin: 0 0 24px 0;">
+      Great news! <strong style="color: ${BRAND.foreground};">${guideName}</strong>${guideHeadline ? ` &mdash; ${guideHeadline}` : ""} accepted your request for a call.
+    </p>
+
+    <div style="text-align: center; margin: 28px 0 32px;">
+      ${primaryButton(calendarLink, "Book your call")}
+    </div>
+
+    <p style="font-size: 13px; color: ${BRAND.muted}; line-height: 1.5; margin: 0;">
+      Pick a time that works for you. The guide is looking forward to connecting.
+    </p>
+  `;
+
   await resend.emails.send({
     from: FROM_EMAIL,
     to: requesterEmail,
     subject: `${guideName} accepted your call request!`,
-    html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-        <p style="font-size: 16px; color: #1a1a1a;">Hi ${requesterName.split(" ")[0]},</p>
-
-        <p style="font-size: 15px; color: #333; line-height: 1.6;">
-          Great news! <strong>${guideName}</strong>${guideHeadline ? ` (${guideHeadline})` : ""} has approved your request for a call.
-        </p>
-
-        <div style="margin: 28px 0; text-align: center;">
-          <a href="${calendarLink}" style="display: inline-block; background: #6366f1; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">
-            Book your call
-          </a>
-        </div>
-
-        <p style="font-size: 13px; color: #999; margin-top: 32px;">
-          This link was sent via <a href="https://howdoihelp.ai" style="color: #6366f1; text-decoration: none;">howdoihelp.ai</a>
-        </p>
-      </div>
-    `,
+    html: emailLayout(content),
   });
 }

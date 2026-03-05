@@ -24,10 +24,10 @@ const MODELS: Record<string, ModelConfig> = {
     openaiOutputCostPerM: 0.40,
   },
   recommend: {
-    claude: "claude-sonnet-4-6",
+    claude: "claude-haiku-4-5-20251001",
     openai: "gpt-4.1-mini",
-    claudeInputCostPerM: 3.0,
-    claudeOutputCostPerM: 15.0,
+    claudeInputCostPerM: 0.80,
+    claudeOutputCostPerM: 4.0,
     openaiInputCostPerM: 0.40,
     openaiOutputCostPerM: 1.60,
   },
