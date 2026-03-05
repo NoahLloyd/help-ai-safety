@@ -1,43 +1,44 @@
-"use client";
+import { createAuthClient } from "@/lib/supabase-server";
+import type { CreatorFlowStep, CreatorPageData } from "@/types";
+import { CreatorFlow } from "@/components/funnel/creator-flow";
+import { ReferralRedirect } from "./referral-redirect";
 
-import { useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { setVariant } from "@/lib/variants";
-import type { Variant } from "@/types";
-
-const REF_KEY = "hdih_ref";
-
-/** Slugs that map to a specific variant/flow */
-const FLOW_SLUGS: Record<string, Variant> = {
-  profile: "A",
-  browse: "B",
-  questions: "C",
-};
+interface SlugPageProps {
+  params: Promise<{ slug: string }>;
+}
 
 /**
- * Catch-all for affiliate/creator referral links and flow shortcuts.
- * Static routes (e.g. /events, /communities, /admin) take priority
- * in Next.js, so this only fires for unknown slugs.
- *
- * - /profile, /browse, /questions → set variant and redirect to /
- * - Any other slug → store as referral and redirect to /
+ * Catch-all for dynamic slugs.
+ * 1. Check if slug matches an active creator page → render their custom flow
+ * 2. Otherwise → fall through to referral redirect (existing behavior)
  */
-export default function ReferralPage() {
-  const router = useRouter();
-  const { slug } = useParams<{ slug: string }>();
+export default async function SlugPage({ params }: SlugPageProps) {
+  const { slug } = await params;
 
-  useEffect(() => {
-    if (slug) {
-      // Check if this is a flow shortcut
-      const variant = FLOW_SLUGS[slug];
-      if (variant) {
-        setVariant(variant);
-      }
-      // Always store the slug as a ref (for future creator tracking)
-      sessionStorage.setItem(REF_KEY, slug);
-    }
-    router.replace("/");
-  }, [slug, router]);
+  // Check for a creator page with this slug
+  const supabase = await createAuthClient();
+  const { data: creatorPage } = await supabase
+    .from("creator_pages")
+    .select("*")
+    .eq("slug", slug)
+    .eq("status", "active")
+    .single();
 
-  return null;
+  if (creatorPage) {
+    const page = creatorPage as CreatorPageData;
+    return (
+      <CreatorFlow
+        flowConfig={page.flow_config}
+        overrides={{
+          excluded_resources: page.excluded_resources,
+          boosted_resources: page.boosted_resources,
+          resource_weights: page.resource_weights,
+        }}
+        slug={page.slug}
+      />
+    );
+  }
+
+  // No creator page found — use existing referral redirect behavior
+  return <ReferralRedirect slug={slug} />;
 }

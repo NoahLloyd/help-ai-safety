@@ -8,8 +8,7 @@ import {
   LayoutDashboard,
   UserCircle,
   BookOpen,
-  BarChart3,
-  MessageSquare,
+  Megaphone,
   Menu,
   X,
   LogOut,
@@ -30,16 +29,17 @@ const NAV_ITEMS = [
     active: true,
   },
   {
+    label: "Creators",
+    href: "/dashboard/creator",
+    icon: Megaphone,
+    active: true,
+  },
+  {
     label: "Guide Playbook",
     href: "/dashboard/resources",
     icon: BookOpen,
     active: true,
   },
-];
-
-const COMING_SOON_ITEMS = [
-  { label: "Analytics", icon: BarChart3 },
-  { label: "Messages", icon: MessageSquare },
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -93,25 +93,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-
-          {/* Coming soon section */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-2">
-              Coming soon
-            </p>
-            {COMING_SOON_ITEMS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/25 cursor-default"
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </div>
-              );
-            })}
-          </div>
 
           {/* Spacer */}
           <div className="flex-1" />
