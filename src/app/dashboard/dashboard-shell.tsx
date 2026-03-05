@@ -12,7 +12,6 @@ import {
   Menu,
   X,
   LogOut,
-  ExternalLink,
 } from "lucide-react";
 
 const NAV_SECTIONS = [
@@ -115,15 +114,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
           {/* Spacer */}
           <div className="flex-1" />
-
-          {/* Public listing link */}
-          <Link
-            href="/guides"
-            className="flex items-center gap-2 px-3 py-2 text-xs text-white/40 hover:text-white/60 transition-colors"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            View public listing
-          </Link>
 
           {/* User section */}
           <div className="mt-2 pt-4 border-t border-white/10">
