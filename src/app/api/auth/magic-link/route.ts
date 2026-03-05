@@ -40,7 +40,12 @@ export async function POST(req: Request) {
       return Response.json({ error: "Failed to generate link" }, { status: 500 });
     }
 
-    const actionLink = data.properties.action_link;
+    // Supabase ignores our redirectTo and uses the project's Site URL setting,
+    // so we replace the redirect_to parameter in the generated link ourselves.
+    const rawLink = data.properties.action_link;
+    const linkUrl = new URL(rawLink);
+    linkUrl.searchParams.set("redirect_to", callbackUrl);
+    const actionLink = linkUrl.toString();
 
     await sendMagicLinkEmail(email.trim(), actionLink);
 
