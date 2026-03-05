@@ -230,8 +230,8 @@ export function PipelineShell({
         </div>
         <p className="text-xs text-muted mt-1 font-mono">
           {mode === "dry-run"
-            ? "Dry run mode — data is fetched and displayed but NOT inserted into the database"
-            : "Live mode — data will be inserted into the candidates tables"}
+            ? "Dry run mode: data is fetched and displayed but NOT inserted into the database"
+            : "Live mode: data will be inserted into the candidates tables"}
         </p>
       </div>
 

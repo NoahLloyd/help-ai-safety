@@ -183,7 +183,7 @@ export function ProfileConfirmation({
                     <p key={i} className="text-sm text-muted-foreground">
                       {[edu.degree, edu.field].filter(Boolean).join(" in ") ||
                         edu.school}
-                      {edu.degree || edu.field ? ` — ${edu.school}` : ""}
+                      {edu.degree || edu.field ? `, ${edu.school}` : ""}
                     </p>
                   ))}
                 </div>
@@ -236,7 +236,7 @@ export function ProfileConfirmation({
               onClick={onSkip}
               className="text-sm text-muted transition-colors hover:text-foreground"
             >
-              Skip — don&apos;t personalize
+              Skip, don&apos;t personalize
             </button>
 
             <button

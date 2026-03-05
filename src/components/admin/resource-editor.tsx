@@ -243,7 +243,7 @@ export function ResourceEditor({ resource, isNew, onSave, onDelete, onCancel }: 
                 <label>
                   <span className={labelCls}>
                     Impact (positioned)
-                    <Tip text="Expected value for someone who's particularly well-suited — e.g. a policy expert for a policy job. Leave empty if same as general." />
+                    <Tip text="Expected value for someone who's particularly well-suited, e.g. a policy expert for a policy job. Leave empty if same as general." />
                   </span>
                   <input
                     type="number"
@@ -297,7 +297,7 @@ export function ResourceEditor({ resource, isNew, onSave, onDelete, onCancel }: 
               <section>
                 <h3 className="text-[10px] font-mono uppercase tracking-widest text-muted mb-3 pb-1 border-b border-border">
                   Verification
-                  <Tip text="Automated URL checks and activity scoring. You can override the activity score manually — it won't be overwritten by future auto-checks if you set it here." />
+                  <Tip text="Automated URL checks and activity scoring. You can override the activity score manually. It won't be overwritten by future auto-checks if you set it here." />
                 </h3>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div>

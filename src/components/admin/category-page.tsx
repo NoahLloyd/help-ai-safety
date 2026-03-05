@@ -187,7 +187,7 @@ export function CategoryPage({ categoryId }: CategoryPageProps) {
                   <h3 className="text-sm font-medium text-foreground mb-0.5">{resource.title}</h3>
                   <p className="text-xs text-muted line-clamp-1">{resource.description}</p>
                   <div className="flex items-center gap-1.5 mt-1 text-[11px] font-mono text-muted">
-                    <span>{resource.source_org || "—"}</span>
+                    <span>{resource.source_org || "-"}</span>
                     <span className="text-border">·</span>
                     <span>{resource.location}</span>
                     {resource.submitted_by && (

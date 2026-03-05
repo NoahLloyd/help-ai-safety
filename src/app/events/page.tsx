@@ -5,7 +5,7 @@ import { EventsClientPage } from "./events-client-page";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Events — howdoihelp.ai",
+  title: "Events | howdoihelp.ai",
   description: "Upcoming AI safety events, workshops, meetups, and gatherings.",
 };
 

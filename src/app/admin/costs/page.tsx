@@ -220,7 +220,7 @@ export default function CostsPage() {
                     </td>
                     <td className="px-4 py-2 font-mono text-foreground text-xs">{e.provider}</td>
                     <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
-                      {e.model || e.endpoint || "—"}
+                      {e.model || e.endpoint || "-"}
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-foreground text-xs">
                       ${(e.estimated_cost_usd || 0).toFixed(4)}

@@ -5,7 +5,7 @@ import { AuthProvider } from "@/components/providers/auth-provider";
 import { DashboardShell } from "./dashboard-shell";
 
 export const metadata: Metadata = {
-  title: "Dashboard — howdoihelp.ai",
+  title: "Dashboard | howdoihelp.ai",
   description: "Manage your profile and guide settings",
   robots: "noindex, nofollow",
 };

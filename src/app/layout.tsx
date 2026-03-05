@@ -17,9 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "How Do I Help? — AI Safety",
+  title: "How Do I Help? | AI Safety",
   description:
-    "You've seen the warnings about AI. Now find out how you can actually help — whether you're technical, non-technical, or just getting started.",
+    "You've seen the warnings about AI. Now find out how you can actually help, whether you're technical, non-technical, or just getting started.",
   metadataBase: new URL("https://howdoihelp.ai"),
   icons: {
     icon: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     apple: "/apple-icon.png",
   },
   openGraph: {
-    title: "How Do I Help? — AI Safety",
+    title: "How Do I Help? | AI Safety",
     description:
       "You've seen the warnings about AI. Now find out how you can actually help.",
     url: "https://howdoihelp.ai",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "How Do I Help? — AI Safety",
+    title: "How Do I Help? | AI Safety",
     description:
       "You've seen the warnings about AI. Now find out how you can actually help.",
   },

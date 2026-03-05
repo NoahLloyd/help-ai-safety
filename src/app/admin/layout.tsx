@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Dashboard — howdoihelp.ai",
+  title: "Dashboard | howdoihelp.ai",
   description: "Resource management dashboard",
   robots: "noindex, nofollow",
 };

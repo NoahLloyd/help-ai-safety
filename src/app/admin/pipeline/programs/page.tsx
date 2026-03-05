@@ -9,8 +9,8 @@ export default function ProgramsPipelinePage() {
         <>
           <p className="text-xs text-muted font-mono mb-3">
             {ctx.mode === "dry-run"
-              ? "Dry run mode — programs are fetched and displayed but NOT inserted into the database"
-              : "Live mode — programs will be inserted into the candidates table"}
+              ? "Dry run mode: programs are fetched and displayed but NOT inserted into the database"
+              : "Live mode: programs will be inserted into the candidates table"}
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {/* BlueDot Gatherer */}
@@ -25,7 +25,7 @@ export default function ProgramsPipelinePage() {
                 <div>
                   <h3 className="text-sm font-medium text-foreground">BlueDot Impact</h3>
                   <p className="text-[11px] text-muted font-mono mt-0.5">
-                    tRPC API — courses + rounds
+                    tRPC API: courses + rounds
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -61,7 +61,7 @@ export default function ProgramsPipelinePage() {
                 <div>
                   <h3 className="text-sm font-medium text-foreground">AISafety.com</h3>
                   <p className="text-[11px] text-muted font-mono mt-0.5">
-                    Airtable — fellowships, bootcamps, courses
+                    Airtable: fellowships, bootcamps, courses
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">

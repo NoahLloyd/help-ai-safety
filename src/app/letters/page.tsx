@@ -6,7 +6,7 @@ import { CategoryListing } from "@/components/public/category-listing";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Letters & Petitions — howdoihelp.ai",
+  title: "Letters & Petitions | howdoihelp.ai",
   description: "Open letters, pledges, and statements about AI safety you can sign.",
 };
 

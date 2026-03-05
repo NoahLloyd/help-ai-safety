@@ -12,8 +12,8 @@ export default function CommunitiesPipelinePage() {
         <>
           <p className="text-xs text-muted font-mono mb-3">
             {ctx.mode === "dry-run"
-              ? "Dry run mode — communities are fetched and displayed but NOT inserted into the database"
-              : "Live mode — communities will be inserted into the candidates table"}
+              ? "Dry run mode: communities are fetched and displayed but NOT inserted into the database"
+              : "Live mode: communities will be inserted into the candidates table"}
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Sync Communities (gatherer) */}
