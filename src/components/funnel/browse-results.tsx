@@ -625,7 +625,7 @@ function ConnectExplorer({ resources, variant, geo, onClickTrack, onLocationChan
       items = items.filter((r) => isOnline(r) || r.location.toLowerCase() === "global");
     }
 
-    // Sort — always factor in nearness for communities & events
+    // Sort - always factor in nearness for communities & events
     if (sort === "relevance") {
       if (tab === "events") {
         // Nearness first, then date within same nearness tier

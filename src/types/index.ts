@@ -220,6 +220,59 @@ export interface GuideRecommendation {
   };
 }
 
+// ─── Creator Pages ──────────────────────────────────────────
+
+export interface CreatorWelcomeStep {
+  type: "welcome";
+  title: string;
+  subtitle: string;
+}
+
+export interface CreatorQuestionOption {
+  id: string;
+  label: string;
+}
+
+export interface CreatorCustomQuestion {
+  id: string;
+  question: string;
+  options: CreatorQuestionOption[];
+}
+
+export interface CreatorQuestionsStep {
+  type: "questions";
+  useDefaults: boolean;
+  customQuestions: CreatorCustomQuestion[];
+}
+
+export interface CreatorProfileStep {
+  type: "profile";
+}
+
+export interface CreatorResultsStep {
+  type: "results";
+  style: "ranked" | "browse";
+}
+
+export type CreatorFlowStep =
+  | CreatorWelcomeStep
+  | CreatorQuestionsStep
+  | CreatorProfileStep
+  | CreatorResultsStep;
+
+export interface CreatorPageData {
+  id: string;
+  creator_id: string;
+  slug: string;
+  status: "draft" | "active" | "paused";
+  flow_config: CreatorFlowStep[];
+  excluded_resources: string[];
+  boosted_resources: string[];
+  resource_weights: Record<string, number>;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── API Usage ──────────────────────────────────────────────
 
 export interface ApiUsageEntry {

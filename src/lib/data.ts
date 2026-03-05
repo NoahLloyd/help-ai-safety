@@ -35,7 +35,7 @@ export async function fetchResources(): Promise<Resource[]> {
 
 /**
  * Track a click on a resource.
- * Fire-and-forget — don't block the user experience.
+ * Fire-and-forget - don't block the user experience.
  */
 export async function trackClick(
   resourceId: string,
@@ -56,6 +56,48 @@ export async function trackClick(
       geo_country: geoCountry || null,
     });
   } catch {
-    // Silently fail — never block UX for tracking
+    // Silently fail - never block UX for tracking
   }
+}
+
+// ─── Creator Resource Overrides ─────────────────────────────
+
+export interface CreatorOverrides {
+  excluded_resources: string[];
+  boosted_resources: string[];
+  resource_weights: Record<string, number>;
+}
+
+/**
+ * Apply creator-specific overrides to resources.
+ * - Filters out excluded resources
+ * - Applies weight multipliers to ev_general
+ * - Boosts pinned resources by increasing their ev_general
+ */
+export function applyCreatorOverrides(
+  resources: Resource[],
+  overrides: CreatorOverrides
+): Resource[] {
+  const excluded = new Set(overrides.excluded_resources);
+  const boosted = new Set(overrides.boosted_resources);
+
+  return resources
+    .filter((r) => !excluded.has(r.id))
+    .map((r) => {
+      let evGeneral = r.ev_general;
+
+      // Apply custom weight if set
+      const weight = overrides.resource_weights[r.id];
+      if (weight != null) {
+        evGeneral *= weight;
+      }
+
+      // Boost pinned resources
+      if (boosted.has(r.id)) {
+        evGeneral *= 1.5;
+      }
+
+      if (evGeneral === r.ev_general) return r;
+      return { ...r, ev_general: evGeneral };
+    });
 }

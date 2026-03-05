@@ -81,7 +81,7 @@ function buildSearchQuery(profile: EnrichedProfile): string {
   if (profile.currentTitle) parts.push(profile.currentTitle);
   if (profile.currentCompany) parts.push(profile.currentCompany);
   if (parts.length === 1 && profile.headline) {
-    // Name only — add headline for disambiguation
+    // Name only - add headline for disambiguation
     parts.push(profile.headline.slice(0, 60));
   }
   return parts.join(", ");
@@ -91,11 +91,11 @@ function buildSearchQuery(profile: EnrichedProfile): string {
 interface ViewState {
   /** The status message shown with the spinner */
   statusText: string;
-  /** Profile card (name, photo, headline) — shown when available */
+  /** Profile card (name, photo, headline) - shown when available */
   profile?: EnrichedProfile;
   /** Detail tags from enrichment (skills, experience, repos) */
   details?: string[];
-  /** Citations/links being checked — shown when available */
+  /** Citations/links being checked - shown when available */
   citations?: string[];
   /** Short snippet lines from search results */
   snippetLines?: string[];
@@ -700,7 +700,7 @@ export function ProcessingFlow({
   // Determine which visual element is active (URL bar, search bar, or fallback icon)
   const showUrlBar = !view.profile && !view.snippetLines && !view.citations &&
     inputType !== "name" && view.statusText.includes("Looking up");
-  // Search bar only when no profile card is visible — avoids clutter
+  // Search bar only when no profile card is visible - avoids clutter
   const showSearchBar = !view.profile && !view.snippetLines && !view.citations &&
     view.statusText.includes("Searching") && searchQueryRef.current;
   const showStepIcon = !showUrlBar && !showSearchBar;
@@ -717,12 +717,12 @@ export function ProcessingFlow({
             transition={{ duration: 0.4 }}
             className="flex flex-col items-center"
           >
-            {/* URL bar — shown while fetching a profile URL, before profile card appears */}
+            {/* URL bar - shown while fetching a profile URL, before profile card appears */}
             <AnimatePresence>
               {showUrlBar && <FetchingUrlBar url={input} />}
             </AnimatePresence>
 
-            {/* Profile card — fades in when available, fades out when search results arrive */}
+            {/* Profile card - fades in when available, fades out when search results arrive */}
             <AnimatePresence>
               {view.profile && !view.snippetLines && (
                 <motion.div
@@ -763,7 +763,7 @@ export function ProcessingFlow({
               )}
             </AnimatePresence>
 
-            {/* Detail tags — skills, experience, repos from enrichment */}
+            {/* Detail tags - skills, experience, repos from enrichment */}
             <AnimatePresence>
               {view.details && view.details.length > 0 && !view.snippetLines && (
                 <motion.div
@@ -790,14 +790,14 @@ export function ProcessingFlow({
               )}
             </AnimatePresence>
 
-            {/* Search bar — shown while searching for a person online */}
+            {/* Search bar - shown while searching for a person online */}
             <AnimatePresence>
               {showSearchBar && (
                 <SearchQueryBar query={searchQueryRef.current} />
               )}
             </AnimatePresence>
 
-            {/* Research card — snippets + sources integrated */}
+            {/* Research card - snippets + sources integrated */}
             <AnimatePresence>
               {view.snippetLines && view.snippetLines.length > 0 && (
                 <motion.div
