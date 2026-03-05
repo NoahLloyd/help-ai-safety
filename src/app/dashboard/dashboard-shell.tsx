@@ -64,7 +64,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh bg-background">
       {/* ── Sidebar (desktop) ───────────────────────────────── */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-60 flex-col bg-[#13132B] text-white">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-60 flex-col bg-gradient-to-b from-[#0a2e23] to-[#0a1f18] text-white">
         <div className="flex flex-col h-full px-4 py-6 overflow-y-auto">
           {/* Brand */}
           <Link
@@ -162,7 +162,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ── Mobile top bar ───────────────────────────────────── */}
-      <div className="lg:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between bg-[#13132B] px-4 py-3">
+      <div className="lg:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between bg-[#0a2e23] px-4 py-3">
         <Link
           href="/"
           className="flex items-center gap-2 text-sm font-semibold text-white/80"
@@ -194,7 +194,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             className="lg:hidden fixed inset-0 z-30 bg-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="lg:hidden fixed top-[52px] inset-x-0 z-40 bg-[#13132B] border-t border-white/10 px-4 py-4">
+          <div className="lg:hidden fixed top-[52px] inset-x-0 z-40 bg-[#0a2e23] border-t border-white/10 px-4 py-4">
             <nav className="flex flex-col gap-4">
               {NAV_SECTIONS.map((section, si) => (
                 <div key={si} className="flex flex-col gap-1">

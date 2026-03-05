@@ -48,16 +48,28 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}`,
-      },
-    });
+    try {
+      const res = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          redirectTo: `/auth/callback?next=${next}`,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+      } else {
+        setMagicLinkSent(true);
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
 
     setLoading(false);
-    if (error) setError(error.message);
-    else setMagicLinkSent(true);
   }
 
   if (checkingAuth) {
