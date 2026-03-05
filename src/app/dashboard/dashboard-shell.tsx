@@ -7,6 +7,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import {
   LayoutDashboard,
   UserCircle,
+  BookOpen,
   BarChart3,
   MessageSquare,
   Menu,
@@ -26,6 +27,12 @@ const NAV_ITEMS = [
     label: "Guide Profile",
     href: "/dashboard/guide",
     icon: UserCircle,
+    active: true,
+  },
+  {
+    label: "Guide Playbook",
+    href: "/dashboard/resources",
+    icon: BookOpen,
     active: true,
   },
 ];
