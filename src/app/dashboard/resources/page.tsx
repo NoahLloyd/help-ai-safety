@@ -156,7 +156,7 @@ export default function ResourcesPage() {
         research, and mentorship studies.
       </p>
 
-      <div className="mt-10 flex flex-col gap-12">
+      <div className="mt-10 flex flex-col gap-14">
         {SECTIONS.map((section, si) => (
           <section key={si}>
             <h2 className="text-lg font-semibold tracking-tight text-foreground">
@@ -168,16 +168,16 @@ export default function ResourcesPage() {
               </p>
             )}
 
-            <div className="mt-5 flex flex-col gap-4">
+            <div className="mt-5 flex flex-col">
               {section.insights.map((insight, ii) => (
                 <div
                   key={ii}
-                  className="rounded-2xl border border-border bg-card p-5"
+                  className={`py-5 ${ii > 0 ? "border-t border-border" : ""}`}
                 >
                   <h3 className="text-sm font-semibold text-foreground leading-snug">
                     {insight.title}
                   </h3>
-                  <p className="mt-2.5 text-sm text-muted-foreground leading-relaxed">
+                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                     {insight.body}
                   </p>
                 </div>
@@ -196,14 +196,14 @@ export default function ResourcesPage() {
           Sources and more depth on specific techniques.
         </p>
 
-        <div className="mt-5 flex flex-col gap-2">
+        <div className="mt-5 flex flex-col">
           {FURTHER_READING.map((link, i) => (
             <a
               key={i}
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 transition-all hover:border-accent/50 hover:bg-card-hover"
+              className={`group flex items-center justify-between py-3 transition-colors hover:text-accent ${i > 0 ? "border-t border-border" : ""}`}
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground group-hover:text-accent transition-colors">
