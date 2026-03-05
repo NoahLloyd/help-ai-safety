@@ -12,6 +12,7 @@ import {
   updateProfile,
   uploadAvatar,
 } from "../actions";
+import { LanguageSelect } from "@/components/ui/language-select";
 
 // ─── Constants ──────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ const EXPERIENCE_LEVEL_OPTIONS = [
   {
     value: "brand_new",
     label: "Brand new to AI safety",
-    desc: "Just heard about it, curious",
+    desc: "Just starting to learn about the field",
   },
   {
     value: "exploring",
@@ -86,61 +87,16 @@ const EXPERIENCE_LEVEL_OPTIONS = [
   },
 ];
 
-const CALL_FORMAT_OPTIONS = [
-  {
-    value: "one_off" as const,
-    label: "One-off calls",
-    desc: "Quick advice, answer questions, point them in the right direction",
-  },
-  {
-    value: "ongoing" as const,
-    label: "Ongoing mentorship",
-    desc: "Build a relationship over multiple calls",
-  },
-  {
-    value: "either" as const,
-    label: "Either works",
-    desc: "Happy with both one-off and ongoing",
-  },
-];
-
-const LANGUAGE_OPTIONS = [
-  "English",
-  "Spanish",
-  "French",
-  "German",
-  "Mandarin",
-  "Japanese",
-  "Portuguese",
-  "Hindi",
-  "Arabic",
-  "Korean",
-];
-
-const CAPACITY_OPTIONS = [
-  { value: 1, label: "1/month", desc: "Occasional" },
-  { value: 2, label: "2/month", desc: "A couple of calls" },
-  { value: 4, label: "4/month", desc: "Weekly" },
-  { value: 8, label: "8/month", desc: "Multiple per week" },
-];
-
-const DURATION_OPTIONS = [
-  { value: 15, label: "15 min" },
-  { value: 30, label: "30 min" },
-  { value: 45, label: "45 min" },
-  { value: 60, label: "60 min" },
-];
-
 const GEO_OPTIONS = [
-  { value: "anywhere", label: "Anyone, anywhere" },
-  { value: "same_timezone", label: "Same timezone preferred" },
-  { value: "same_country", label: "Same country preferred" },
+  { value: "anywhere", label: "Anyone, anywhere", desc: "No geographic restrictions" },
+  { value: "same_timezone", label: "Only same timezone", desc: "Easier to schedule calls" },
+  { value: "same_country", label: "Only same country", desc: "Shared context and culture" },
+  { value: "same_city", label: "Only same city", desc: "Option for in-person meetups" },
 ];
 
 type GuideStatus = "draft" | "active" | "paused";
-type CallFormat = "one_off" | "ongoing" | "either";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 // ─── Animations ─────────────────────────────────────────────
 
@@ -176,8 +132,10 @@ export default function GuideSettingsPage() {
   // Form state — topics
   const [topics, setTopics] = useState<string[]>([]);
   const [bestFor, setBestFor] = useState("");
+  const [customTopic, setCustomTopic] = useState("");
 
   // Form state — who to talk to
+  const [customBackground, setCustomBackground] = useState("");
   const [preferredCareerStages, setPreferredCareerStages] = useState<string[]>(
     []
   );
@@ -187,13 +145,10 @@ export default function GuideSettingsPage() {
   const [preferredExperienceLevel, setPreferredExperienceLevel] = useState<
     string[]
   >([]);
-  const [callFormat, setCallFormat] = useState<CallFormat>("either");
   const [notAGoodFit, setNotAGoodFit] = useState("");
 
   // Form state — availability
   const [calendarLink, setCalendarLink] = useState("");
-  const [capacityPerMonth, setCapacityPerMonth] = useState(4);
-  const [meetingDuration, setMeetingDuration] = useState(30);
   const [location, setLocation] = useState("");
   const [isAvailableInPerson, setIsAvailableInPerson] = useState(false);
   const [languages, setLanguages] = useState<string[]>(["English"]);
@@ -217,8 +172,6 @@ export default function GuideSettingsPage() {
         if (guide) {
           setHeadline(guide.headline || "");
           setCalendarLink(guide.calendar_link || "");
-          setCapacityPerMonth(guide.capacity_per_month);
-          setMeetingDuration(guide.meeting_duration_minutes);
           setTopics(guide.topics || []);
           setBestFor(guide.best_for || "");
           setLocation(guide.location || "");
@@ -229,7 +182,6 @@ export default function GuideSettingsPage() {
           setPreferredCareerStages(guide.preferred_career_stages || []);
           setPreferredBackgrounds(guide.preferred_backgrounds || []);
           setPreferredExperienceLevel(guide.preferred_experience_level || []);
-          setCallFormat(guide.call_format || "either");
           setLanguages(
             guide.languages?.length ? guide.languages : ["English"]
           );
@@ -317,8 +269,8 @@ export default function GuideSettingsPage() {
         status: finalStatus,
         headline,
         calendar_link: calendarLink || null,
-        capacity_per_month: capacityPerMonth,
-        meeting_duration_minutes: meetingDuration,
+        capacity_per_month: null,
+        meeting_duration_minutes: 30,
         topics,
         expertise_areas: [],
         best_for: bestFor || null,
@@ -329,7 +281,7 @@ export default function GuideSettingsPage() {
         preferred_career_stages: preferredCareerStages,
         preferred_backgrounds: preferredBackgrounds,
         preferred_experience_level: preferredExperienceLevel,
-        call_format: callFormat,
+        call_format: "one_off",
         languages,
         not_a_good_fit: notAGoodFit || null,
         geographic_preference: geographicPreference,
@@ -527,6 +479,53 @@ export default function GuideSettingsPage() {
                     </button>
                   );
                 })}
+
+                {/* Custom topics added by the user */}
+                {topics
+                  .filter((t) => !TOPIC_OPTIONS.includes(t))
+                  .map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTopics(topics.filter((x) => x !== t))}
+                      className="w-full rounded-xl border border-accent bg-accent/10 px-4 py-4 text-left text-base transition-all cursor-pointer hover:border-accent/50 hover:bg-card-hover group"
+                    >
+                      <span className="font-medium flex items-center justify-between">
+                        {t}
+                        <span className="text-xs text-muted opacity-0 group-hover:opacity-100 transition-opacity">
+                          Remove
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+
+                {/* Add custom topic */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const trimmed = customTopic.trim();
+                    if (trimmed && !topics.includes(trimmed)) {
+                      setTopics([...topics, trimmed]);
+                      setCustomTopic("");
+                    }
+                  }}
+                  className="flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={customTopic}
+                    onChange={(e) => setCustomTopic(e.target.value)}
+                    placeholder="Add your own topic..."
+                    className="flex-1 rounded-xl border border-dashed border-border bg-card px-4 py-4 text-base outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+                  />
+                  {customTopic.trim() && (
+                    <button
+                      type="submit"
+                      className="shrink-0 rounded-xl bg-accent px-4 py-4 text-sm font-medium text-white hover:bg-accent-hover transition-colors cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  )}
+                </form>
               </div>
 
               <div className="mt-6">
@@ -612,7 +611,7 @@ export default function GuideSettingsPage() {
                     What backgrounds?
                   </label>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {BACKGROUND_OPTIONS.map((bg) => {
+                    {BACKGROUND_OPTIONS.filter((bg) => bg !== "Other").map((bg) => {
                       const selected = preferredBackgrounds.includes(bg);
                       return (
                         <button
@@ -634,7 +633,62 @@ export default function GuideSettingsPage() {
                         </button>
                       );
                     })}
+
+                    {/* Custom backgrounds */}
+                    {preferredBackgrounds
+                      .filter((bg) => !BACKGROUND_OPTIONS.includes(bg))
+                      .map((bg) => (
+                        <button
+                          key={bg}
+                          onClick={() =>
+                            setPreferredBackgrounds(
+                              preferredBackgrounds.filter((x) => x !== bg)
+                            )
+                          }
+                          className="rounded-full border border-accent bg-accent/10 px-3.5 py-2 text-sm font-medium text-foreground transition-all cursor-pointer hover:border-accent/50 group"
+                        >
+                          {bg}
+                          <span className="ml-1.5 text-xs text-muted opacity-0 group-hover:opacity-100 transition-opacity">
+                            ×
+                          </span>
+                        </button>
+                      ))}
                   </div>
+
+                  {/* Add custom background */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const trimmed = customBackground.trim();
+                      if (
+                        trimmed &&
+                        !preferredBackgrounds.includes(trimmed)
+                      ) {
+                        setPreferredBackgrounds([
+                          ...preferredBackgrounds,
+                          trimmed,
+                        ]);
+                        setCustomBackground("");
+                      }
+                    }}
+                    className="mt-2 flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={customBackground}
+                      onChange={(e) => setCustomBackground(e.target.value)}
+                      placeholder="Add another background..."
+                      className="flex-1 rounded-full border border-dashed border-border bg-card px-3.5 py-2 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+                    />
+                    {customBackground.trim() && (
+                      <button
+                        type="submit"
+                        className="shrink-0 rounded-full bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </form>
                 </div>
 
                 {/* AI safety experience */}
@@ -675,33 +729,6 @@ export default function GuideSettingsPage() {
                   </div>
                 </div>
 
-                {/* Call format */}
-                <div>
-                  <label className="text-sm font-medium text-foreground">
-                    What kind of commitment?
-                  </label>
-                  <div className="mt-3 flex flex-col gap-2">
-                    {CALL_FORMAT_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setCallFormat(opt.value)}
-                        className={`w-full rounded-xl border px-4 py-3.5 text-left transition-all cursor-pointer hover:border-accent/50 ${
-                          callFormat === opt.value
-                            ? "border-accent bg-accent/10"
-                            : "border-border bg-card"
-                        }`}
-                      >
-                        <span className="block text-sm font-medium text-foreground">
-                          {opt.label}
-                        </span>
-                        <span className="block text-xs text-muted mt-0.5">
-                          {opt.desc}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Not a good fit */}
                 <div>
                   <label
@@ -711,7 +738,7 @@ export default function GuideSettingsPage() {
                     Who are you <em>not</em> a good fit for?
                   </label>
                   <p className="text-xs text-muted mt-0.5 mb-2">
-                    Totally optional — helps us avoid bad matches
+                    Totally optional. Helps us avoid bad matches
                   </p>
                   <textarea
                     id="notGoodFit"
@@ -726,10 +753,10 @@ export default function GuideSettingsPage() {
             </motion.div>
           )}
 
-          {/* ── Step 3: Availability ──────────────────────────── */}
+          {/* ── Step 3: Availability + Review ─────────────────── */}
           {stepIndex === 3 && (
             <motion.div
-              key="availability"
+              key="availability-review"
               custom={direction}
               variants={stepVariants}
               initial="enter"
@@ -738,63 +765,14 @@ export default function GuideSettingsPage() {
               transition={{ duration: 0.25, ease: "easeInOut" }}
             >
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                How much time can you give?
+                Almost there.
               </h2>
               <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-                Be honest — we&apos;d rather recommend you less often than
-                burn you out. You can always change this.
+                Add your booking link so people can schedule a 30-minute video
+                call with you.
               </p>
 
               <div className="mt-8 flex flex-col gap-6">
-                {/* Capacity */}
-                <div>
-                  <label className="text-sm font-medium text-foreground">
-                    Video calls per month
-                  </label>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {CAPACITY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setCapacityPerMonth(opt.value)}
-                        className={`rounded-xl border px-4 py-3.5 text-left transition-all cursor-pointer hover:border-accent/50 ${
-                          capacityPerMonth === opt.value
-                            ? "border-accent bg-accent/10"
-                            : "border-border bg-card"
-                        }`}
-                      >
-                        <span className="block text-base font-medium text-foreground">
-                          {opt.label}
-                        </span>
-                        <span className="block text-xs text-muted mt-0.5">
-                          {opt.desc}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Duration */}
-                <div>
-                  <label className="text-sm font-medium text-foreground">
-                    How long per call?
-                  </label>
-                  <div className="mt-3 flex gap-2">
-                    {DURATION_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setMeetingDuration(opt.value)}
-                        className={`flex-1 rounded-xl border py-3 text-center text-sm font-medium transition-all cursor-pointer hover:border-accent/50 ${
-                          meetingDuration === opt.value
-                            ? "border-accent bg-accent/10 text-foreground"
-                            : "border-border bg-card text-muted-foreground"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Calendar */}
                 <div>
                   <label
@@ -804,7 +782,8 @@ export default function GuideSettingsPage() {
                     Booking link
                   </label>
                   <p className="text-xs text-muted mt-0.5 mb-2">
-                    People will use this to schedule a call with you
+                    Required to go live. Calendly, Cal.com, or any scheduling
+                    tool works.
                   </p>
                   <input
                     id="calendar"
@@ -812,6 +791,7 @@ export default function GuideSettingsPage() {
                     value={calendarLink}
                     onChange={(e) => setCalendarLink(e.target.value)}
                     placeholder="https://calendly.com/you/30min"
+                    autoFocus
                     className="w-full rounded-xl border border-border bg-card px-4 py-4 text-base outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
                   />
                 </div>
@@ -821,25 +801,11 @@ export default function GuideSettingsPage() {
                   <label className="text-sm font-medium text-foreground">
                     Languages you can do calls in
                   </label>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {LANGUAGE_OPTIONS.map((lang) => {
-                      const selected = languages.includes(lang);
-                      return (
-                        <button
-                          key={lang}
-                          onClick={() =>
-                            toggleInArray(languages, lang, setLanguages)
-                          }
-                          className={`rounded-full border px-3.5 py-2 text-sm transition-all cursor-pointer hover:border-accent/50 ${
-                            selected
-                              ? "border-accent bg-accent/10 text-foreground font-medium"
-                              : "border-border bg-card text-muted-foreground"
-                          }`}
-                        >
-                          {lang}
-                        </button>
-                      );
-                    })}
+                  <div className="mt-2">
+                    <LanguageSelect
+                      value={languages}
+                      onChange={setLanguages}
+                    />
                   </div>
                 </div>
 
@@ -905,157 +871,120 @@ export default function GuideSettingsPage() {
                       <button
                         key={opt.value}
                         onClick={() => setGeographicPreference(opt.value)}
-                        className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-all cursor-pointer hover:border-accent/50 ${
+                        className={`w-full rounded-xl border px-4 py-3.5 text-left transition-all cursor-pointer hover:border-accent/50 ${
                           geographicPreference === opt.value
-                            ? "border-accent bg-accent/10 font-medium text-foreground"
-                            : "border-border bg-card text-muted-foreground"
+                            ? "border-accent bg-accent/10"
+                            : "border-border bg-card"
                         }`}
                       >
-                        {opt.label}
+                        <span className="block text-sm font-medium text-foreground">
+                          {opt.label}
+                        </span>
+                        <span className="block text-xs text-muted mt-0.5">
+                          {opt.desc}
+                        </span>
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
 
-          {/* ── Step 4: Review ────────────────────────────────── */}
-          {stepIndex === 4 && (
-            <motion.div
-              key="review"
-              custom={direction}
-              variants={stepVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.25, ease: "easeInOut" }}
-            >
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Here&apos;s how you&apos;ll appear.
-              </h2>
-              <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-                This is what visitors see when we recommend you as someone
-                worth talking to.
-              </p>
+                {/* Optional links */}
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={linkedinUrl}
+                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                    placeholder="LinkedIn URL (optional)"
+                    className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+                  />
+                  <input
+                    type="url"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="Website (optional)"
+                    className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+                  />
+                </div>
+              </div>
 
               {/* Preview card */}
-              <div className="mt-8 rounded-2xl border border-border bg-card p-6">
-                <div className="flex items-start gap-4">
-                  {currentAvatar ? (
-                    <img
-                      src={currentAvatar}
-                      alt=""
-                      className="h-14 w-14 rounded-full border border-border object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-card-hover text-base font-medium text-muted-foreground">
-                      {firstName[0]?.toUpperCase()}
+              <div className="mt-10">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  Preview
+                </p>
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="flex items-start gap-4">
+                    {currentAvatar ? (
+                      <img
+                        src={currentAvatar}
+                        alt=""
+                        className="h-14 w-14 rounded-full border border-border object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-card-hover text-base font-medium text-muted-foreground">
+                        {firstName[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-semibold text-foreground">
+                        {displayName}
+                      </p>
+                      {headline && (
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {headline}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {bio && (
+                    <p className="mt-4 text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                      {bio}
+                    </p>
+                  )}
+
+                  {topics.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {topics.map((t) => (
+                        <span
+                          key={t}
+                          className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
+                        >
+                          {t}
+                        </span>
+                      ))}
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-lg font-semibold text-foreground">
-                      {displayName}
-                    </p>
-                    {headline && (
-                      <p className="text-sm text-muted-foreground mt-0.5">
-                        {headline}
-                      </p>
-                    )}
+
+                  <div className="mt-4 text-xs text-muted">
+                    30 min video call
+                    {location ? ` · ${location}` : ""}
+                    {languages.length > 1
+                      ? ` · ${languages.join(", ")}`
+                      : ""}
                   </div>
-                </div>
 
-                {bio && (
-                  <p className="mt-4 text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                    {bio}
-                  </p>
-                )}
-
-                {topics.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {topics.map((t) => (
-                      <span
-                        key={t}
-                        className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
-                      >
-                        {t}
+                  {calendarLink && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <span className="inline-flex items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs font-medium text-accent">
+                        <svg
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
+                          />
+                        </svg>
+                        Book a call
                       </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-4 text-xs text-muted">
-                  {capacityPerMonth} call
-                  {capacityPerMonth !== 1 ? "s" : ""}/mo &middot;{" "}
-                  {meetingDuration} min
-                  {location ? ` · ${location}` : ""}
-                  {languages.length > 1
-                    ? ` · ${languages.join(", ")}`
-                    : ""}
+                    </div>
+                  )}
                 </div>
-
-                {/* Preferences summary */}
-                {(preferredCareerStages.length > 0 ||
-                  callFormat !== "either") && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-muted">
-                      {callFormat === "one_off"
-                        ? "One-off calls"
-                        : callFormat === "ongoing"
-                          ? "Ongoing mentorship"
-                          : "One-off or ongoing"}
-                      {preferredCareerStages.length > 0 &&
-                        ` · Best for ${preferredCareerStages
-                          .map(
-                            (s) =>
-                              CAREER_STAGE_OPTIONS.find(
-                                (o) => o.value === s
-                              )?.label.toLowerCase()
-                          )
-                          .filter(Boolean)
-                          .join(", ")}`}
-                    </p>
-                  </div>
-                )}
-
-                {calendarLink && (
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <span className="inline-flex items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs font-medium text-accent">
-                      <svg
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={1.5}
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
-                        />
-                      </svg>
-                      Book a call
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Optional links */}
-              <div className="mt-6 flex gap-2">
-                <input
-                  type="url"
-                  value={linkedinUrl}
-                  onChange={(e) => setLinkedinUrl(e.target.value)}
-                  placeholder="LinkedIn URL (optional)"
-                  className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
-                />
-                <input
-                  type="url"
-                  value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="Website (optional)"
-                  className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
-                />
               </div>
 
               {/* Save actions */}
@@ -1066,11 +995,17 @@ export default function GuideSettingsPage() {
               <div className="mt-8 flex flex-col gap-3">
                 <button
                   onClick={() => handleSave("active")}
-                  disabled={saving}
+                  disabled={saving || !calendarLink.trim()}
                   className="w-full rounded-xl bg-accent px-6 py-4 text-base font-medium text-white hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {saving ? "Saving..." : "Go live"}
                 </button>
+
+                {!calendarLink.trim() && (
+                  <p className="text-center text-xs text-muted">
+                    Add a booking link to go live
+                  </p>
+                )}
 
                 <button
                   onClick={() => handleSave("draft")}

@@ -321,7 +321,7 @@ export function ProgramsAdminPage() {
                             {new Date(r.deadline_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted">—</span>
+                          <span className="text-xs text-muted">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">

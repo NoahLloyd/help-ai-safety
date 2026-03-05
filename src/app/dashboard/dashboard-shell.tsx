@@ -1,69 +1,251 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
+import {
+  LayoutDashboard,
+  UserCircle,
+  BarChart3,
+  MessageSquare,
+  Menu,
+  X,
+  LogOut,
+  ExternalLink,
+} from "lucide-react";
+
+const NAV_ITEMS = [
+  {
+    label: "Overview",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    active: true,
+  },
+  {
+    label: "Guide Profile",
+    href: "/dashboard/guide",
+    icon: UserCircle,
+    active: true,
+  },
+];
+
+const COMING_SOON_ITEMS = [
+  { label: "Analytics", icon: BarChart3 },
+  { label: "Messages", icon: MessageSquare },
+];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isGuide = pathname.startsWith("/dashboard/guide");
+  const firstName =
+    (profile?.display_name || profile?.email?.split("@")[0] || "")
+      .split(" ")[0] || "User";
 
   return (
-    <div className="min-h-dvh bg-background">
-      <main className="mx-auto w-full max-w-lg px-6 py-10">
-        {/* Minimal top bar — feels like part of the site, not a separate app */}
-        <div className="flex items-center justify-between mb-10">
+    <div className="flex min-h-dvh bg-background">
+      {/* ── Sidebar (desktop) ───────────────────────────────── */}
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-60 flex-col bg-[#13132B] text-white">
+        <div className="flex flex-col h-full px-4 py-6 overflow-y-auto">
+          {/* Brand */}
           <Link
             href="/"
-            className="text-sm text-muted hover:text-muted-foreground transition-colors"
+            className="flex items-center gap-2.5 px-3 text-sm font-semibold text-white/80 hover:text-white transition-colors"
           >
+            <img
+              src="/icon.png"
+              alt=""
+              className="h-6 w-6 brightness-0 invert opacity-80"
+            />
             howdoihelp.ai
           </Link>
 
-          <div className="flex items-center gap-3">
-            {!isGuide && (
-              <Link
-                href="/dashboard/guide"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Guide settings
-              </Link>
-            )}
-            {isGuide && (
-              <Link
-                href="/dashboard"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Dashboard
-              </Link>
-            )}
+          {/* Primary nav */}
+          <nav className="mt-8 flex flex-col gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive =
+                item.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname.startsWith(item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-white/10 text-white"
+                      : "text-white/50 hover:bg-white/5 hover:text-white/80"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
 
-            <button
-              onClick={signOut}
-              className="flex items-center gap-2 text-sm text-muted hover:text-muted-foreground transition-colors cursor-pointer"
-            >
+          {/* Coming soon section */}
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-2">
+              Coming soon
+            </p>
+            {COMING_SOON_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.label}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/25 cursor-default"
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Public listing link */}
+          <Link
+            href="/guides"
+            className="flex items-center gap-2 px-3 py-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            View public listing
+          </Link>
+
+          {/* User section */}
+          <div className="mt-2 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-3 px-3">
               {profile?.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt=""
-                  className="h-6 w-6 rounded-full"
+                  className="h-8 w-8 rounded-full border border-white/10 object-cover"
                 />
               ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-card-hover text-[10px] font-medium text-muted-foreground">
-                  {(
-                    profile?.display_name ||
-                    profile?.email ||
-                    "?"
-                  )[0]?.toUpperCase()}
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-medium text-white/60">
+                  {firstName[0]?.toUpperCase()}
                 </span>
               )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white/80 truncate">
+                  {profile?.display_name || profile?.email || "User"}
+                </p>
+                {profile?.display_name && profile?.email && (
+                  <p className="text-[11px] text-white/30 truncate">
+                    {profile.email}
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={signOut}
+              className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-white/40 hover:bg-white/5 hover:text-white/60 transition-colors cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
             </button>
           </div>
         </div>
+      </aside>
 
-        {children}
+      {/* ── Mobile top bar ───────────────────────────────────── */}
+      <div className="lg:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between bg-[#13132B] px-4 py-3">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-sm font-semibold text-white/80"
+        >
+          <img
+            src="/icon.png"
+            alt=""
+            className="h-5 w-5 brightness-0 invert opacity-80"
+          />
+          howdoihelp.ai
+        </Link>
+
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 transition-colors cursor-pointer"
+        >
+          {mobileOpen ? (
+            <X className="h-5 w-5" />
+          ) : (
+            <Menu className="h-5 w-5" />
+          )}
+        </button>
+      </div>
+
+      {/* ── Mobile menu overlay ──────────────────────────────── */}
+      {mobileOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-30 bg-black/50"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="lg:hidden fixed top-[52px] inset-x-0 z-40 bg-[#13132B] border-t border-white/10 px-4 py-4">
+            <nav className="flex flex-col gap-1">
+              {NAV_ITEMS.map((item) => {
+                const isActive =
+                  item.href === "/dashboard"
+                    ? pathname === "/dashboard"
+                    : pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-white/10 text-white"
+                        : "text-white/50 hover:bg-white/5 hover:text-white/80"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-7 w-7 rounded-full border border-white/10 object-cover"
+                  />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-medium text-white/60">
+                    {firstName[0]?.toUpperCase()}
+                  </span>
+                )}
+                <span className="text-sm text-white/60 truncate">
+                  {firstName}
+                </span>
+              </div>
+              <button
+                onClick={signOut}
+                className="text-xs text-white/40 hover:text-white/60 transition-colors cursor-pointer"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Main content ─────────────────────────────────────── */}
+      <main className="flex-1 lg:ml-60">
+        <div className="mx-auto w-full max-w-3xl px-6 py-10 pt-[72px] lg:pt-10">
+          {children}
+        </div>
       </main>
     </div>
   );

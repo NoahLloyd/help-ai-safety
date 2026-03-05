@@ -63,7 +63,7 @@ export interface GuideData {
   status: "draft" | "active" | "paused";
   headline: string | null;
   calendar_link: string | null;
-  capacity_per_month: number;
+  capacity_per_month: number | null;
   meeting_duration_minutes: number;
   topics: string[];
   expertise_areas: string[];

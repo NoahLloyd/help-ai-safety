@@ -5,7 +5,7 @@ import { ProgramsClientPage } from "./programs-client-page";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Programs — howdoihelp.ai",
+  title: "Programs | howdoihelp.ai",
   description: "AI safety courses, fellowships, grants, and training programs.",
 };
 
