@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { ApiUsageEntry } from "@/types";
+import { getActivePrompt } from "./prompts";
 
 // Perplexity's Sonar API is OpenAI-compatible
 const BASE_URL = "https://api.perplexity.ai";
@@ -52,37 +53,13 @@ export async function searchPerson(query: string): Promise<{
   }
 
   try {
+    const activePrompt = await getActivePrompt("search");
     const response = await client.chat.completions.create({
       model: MODEL,
       messages: [
         {
           role: "system",
-          content: `Search for this specific person and report ONLY facts you can verify from search results. Do NOT guess, infer, or fill in gaps.
-
-Output these sections (skip any section where you found nothing):
-
-## Identity
-- Full name
-- Current job title and company
-- Location
-
-## Professional Background
-- Current and past roles (only those explicitly found in sources)
-- Key skills or areas of expertise mentioned in their profiles
-
-## Education
-- Schools, degrees, fields of study (only if explicitly stated)
-
-## Public Presence
-- Notable projects, publications, talks, or open-source work
-- Any public writing, blog posts, or media appearances
-
-IMPORTANT RULES:
-- If the name is common, only include information you are confident belongs to THIS specific person. Look for consistency across sources.
-- NEVER fabricate roles, companies, education, or achievements. If you only found a name and headline, report only that.
-- If you found very little, say so explicitly. A short accurate response is far better than a long fabricated one.
-- Do NOT include generic biographical filler or assumptions about someone's interests based on their field.
-- Each fact should be traceable to a search result.`,
+          content: activePrompt.content,
         },
         {
           role: "user",

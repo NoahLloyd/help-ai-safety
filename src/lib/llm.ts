@@ -33,6 +33,24 @@ const MODELS: Record<string, ModelConfig> = {
   },
 };
 
+// ─── Available Models (for workbench UI) ────────────────────
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  provider: "claude" | "openai";
+  inputCostPerM: number;
+  outputCostPerM: number;
+}
+
+export const AVAILABLE_MODELS: ModelOption[] = [
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", provider: "claude", inputCostPerM: 0.80, outputCostPerM: 4.0 },
+  { id: "claude-sonnet-4-5-20250514", label: "Claude Sonnet 4.5", provider: "claude", inputCostPerM: 3.0, outputCostPerM: 15.0 },
+  { id: "gpt-4.1-nano", label: "GPT-4.1 Nano", provider: "openai", inputCostPerM: 0.10, outputCostPerM: 0.40 },
+  { id: "gpt-4.1-mini", label: "GPT-4.1 Mini", provider: "openai", inputCostPerM: 0.40, outputCostPerM: 1.60 },
+  { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "openai", inputCostPerM: 0.15, outputCostPerM: 0.60 },
+];
+
 // ─── Response Type ──────────────────────────────────────────
 
 export interface LLMResponse {
@@ -57,7 +75,8 @@ function isClientError(err: unknown): boolean {
 async function callClaude(
   system: string,
   userContent: string,
-  config: ModelConfig,
+  model: string,
+  costPerM: { input: number; output: number },
   maxTokens: number,
   endpoint: string,
 ): Promise<LLMResponse> {
@@ -66,7 +85,7 @@ async function callClaude(
 
   const anthropic = new Anthropic({ apiKey });
   const response = await anthropic.messages.create({
-    model: config.claude,
+    model,
     max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content: userContent }],
@@ -76,14 +95,14 @@ async function callClaude(
   const inputTokens = response.usage?.input_tokens || 0;
   const outputTokens = response.usage?.output_tokens || 0;
   const estimatedCost =
-    (inputTokens / 1_000_000) * config.claudeInputCostPerM +
-    (outputTokens / 1_000_000) * config.claudeOutputCostPerM;
+    (inputTokens / 1_000_000) * costPerM.input +
+    (outputTokens / 1_000_000) * costPerM.output;
 
   return {
     text,
     usage: {
       provider: "claude",
-      model: config.claude,
+      model,
       endpoint,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
@@ -97,7 +116,8 @@ async function callClaude(
 async function callOpenAI(
   system: string,
   userContent: string,
-  config: ModelConfig,
+  model: string,
+  costPerM: { input: number; output: number },
   maxTokens: number,
   endpoint: string,
 ): Promise<LLMResponse> {
@@ -106,7 +126,7 @@ async function callOpenAI(
 
   const openai = new OpenAI({ apiKey });
   const response = await openai.chat.completions.create({
-    model: config.openai,
+    model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: system },
@@ -118,14 +138,14 @@ async function callOpenAI(
   const inputTokens = response.usage?.prompt_tokens || 0;
   const outputTokens = response.usage?.completion_tokens || 0;
   const estimatedCost =
-    (inputTokens / 1_000_000) * config.openaiInputCostPerM +
-    (outputTokens / 1_000_000) * config.openaiOutputCostPerM;
+    (inputTokens / 1_000_000) * costPerM.input +
+    (outputTokens / 1_000_000) * costPerM.output;
 
   return {
     text,
     usage: {
       provider: "openai",
-      model: config.openai,
+      model,
       endpoint,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
@@ -188,20 +208,40 @@ export async function llmComplete(opts: {
   user: string;
   maxTokens: number;
   endpoint: string;
+  modelOverride?: string;
 }): Promise<LLMResponse> {
   const config = MODELS[opts.task];
 
-  // Try Claude first
+  // Model override: call specific model directly, no fallback
+  if (opts.modelOverride) {
+    const overrideModel = AVAILABLE_MODELS.find((m) => m.id === opts.modelOverride);
+    const costPerM = overrideModel
+      ? { input: overrideModel.inputCostPerM, output: overrideModel.outputCostPerM }
+      : { input: 1, output: 5 }; // sensible fallback
+
+    if (overrideModel?.provider === "openai" || (!overrideModel && opts.modelOverride.startsWith("gpt"))) {
+      return await callOpenAI(opts.system, opts.user, opts.modelOverride, costPerM, opts.maxTokens, opts.endpoint);
+    }
+    return await callClaude(opts.system, opts.user, opts.modelOverride, costPerM, opts.maxTokens, opts.endpoint);
+  }
+
+  // Default: try Claude first, fall back to OpenAI
   try {
-    return await callClaude(opts.system, opts.user, config, opts.maxTokens, opts.endpoint);
+    return await callClaude(
+      opts.system, opts.user, config.claude,
+      { input: config.claudeInputCostPerM, output: config.claudeOutputCostPerM },
+      opts.maxTokens, opts.endpoint,
+    );
   } catch (err) {
-    // Only re-throw true client errors (our fault, not provider issues)
     if (isClientError(err)) throw err;
 
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(`[llm] Claude failed for ${opts.task} (${reason}), falling back to OpenAI (${config.openai})`);
   }
 
-  // Fallback to OpenAI
-  return await callOpenAI(opts.system, opts.user, config, opts.maxTokens, opts.endpoint);
+  return await callOpenAI(
+    opts.system, opts.user, config.openai,
+    { input: config.openaiInputCostPerM, output: config.openaiOutputCostPerM },
+    opts.maxTokens, opts.endpoint,
+  );
 }

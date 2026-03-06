@@ -3,46 +3,9 @@ import { detectPlatform } from "./profile";
 import { scrapeLinkedInProfile } from "./linkedin-scraper";
 import { scrapeWithBrightData } from "./brightdata";
 import { llmComplete, extractJson } from "./llm";
+import { getActivePrompt } from "./prompts";
 
 // ─── LLM Profile Extraction ────────────────────────────────
-
-const EXTRACT_PROMPT = `You are extracting structured profile data from a LinkedIn profile's text content. The text is messy - it was stripped from HTML and contains navigation elements, duplicates, and junk.
-
-WARNING: This text is scraped and noisy. It often contains content that is NOT about the profile owner - for example, posts by OTHER people that this person merely liked or commented on, names of connections, or unrelated text from the page. You must carefully distinguish between:
-- Information that is ACTUALLY about this person (their own name, headline, job title, company, education, skills, about section)
-- Information about OTHER people or content this person simply interacted with
-
-When in doubt, LEAVE IT OUT. Only extract data you are confident belongs to the profile owner. It is much better to return fewer, accurate fields than to include information about the wrong person.
-
-Return ONLY valid JSON, no markdown fences or explanation.
-
-{
-  "fullName": "string or null",
-  "headline": "string or null - their tagline/bio that appears right below their name",
-  "currentTitle": "string or null - current job title",
-  "currentCompany": "string or null - current employer/company",
-  "location": "string or null",
-  "summary": "string or null - their About section text, condensed to 2-3 sentences max",
-  "experience": [{"title": "string", "company": "string"}],
-  "education": [{"school": "string", "degree": "string or null", "field": "string or null"}],
-  "certifications": ["Name (Issuer)"],
-  "awards": ["Award name: description if available"],
-  "volunteer": ["Role at Org - description if available"],
-  "publications": ["Title in Journal"],
-  "languages": ["Language (proficiency if shown)"],
-  "skills": ["skills, tools, technologies, or professional interests mentioned anywhere"]
-}
-
-IMPORTANT:
-- The profile owner's name, headline, and About section typically appear near the top of the text. Use these as your anchor for who this person is.
-- COMPLETELY IGNORE any "Activity" section - posts, likes, comments, reposts. These show OTHER people's content. Never attribute activity feed content to the profile owner.
-- If you see text in a different language that doesn't match the person's profile language, it is almost certainly from someone else's post - ignore it.
-- Look for experience entries even if they're just company names without explicit titles
-- Look for education even if it's just a school name
-- The "About" section text is the most valuable - capture it fully
-- If someone lists courses, articles, or projects, extract relevant skills from those
-- Languages are sometimes listed with proficiency levels (Native, Professional, etc.)
-- Only include skills, experience, and other details you are confident belong to this specific person`;
 
 async function llmExtractProfile(
   rawText: string,
@@ -53,12 +16,14 @@ async function llmExtractProfile(
   }
 
   try {
+    const activePrompt = await getActivePrompt("extract");
     const result = await llmComplete({
       task: "extract",
-      system: EXTRACT_PROMPT,
+      system: activePrompt.content,
       user: rawText,
       maxTokens: 1500,
       endpoint: "extract",
+      modelOverride: activePrompt.model || undefined,
     });
 
     const jsonStr = extractJson(result.text);
