@@ -1,6 +1,7 @@
 import type { EnrichedProfile, ProfilePlatform, ApiUsageEntry } from "@/types";
 import { detectPlatform } from "./profile";
 import { scrapeLinkedInProfile } from "./linkedin-scraper";
+import { scrapeWithBrightData } from "./brightdata";
 import { llmComplete, extractJson } from "./llm";
 
 // ─── LLM Profile Extraction ────────────────────────────────
@@ -169,6 +170,7 @@ export async function githubLookup(url: string): Promise<{
         })),
         followers: user.followers || 0,
         fetchedAt: new Date().toISOString(),
+        dataSource: "github_api",
       },
       usage: { provider: "github", endpoint: `users/${username}`, estimated_cost_usd: 0 },
     };
@@ -477,27 +479,39 @@ export async function enrichProfile(opts: {
   const usageLog: ApiUsageEntry[] = [];
   const platform = opts.platform || (opts.url ? detectPlatform(opts.url) : "other");
 
-  // LinkedIn: scrape for structured data (JSON-LD, OG), then always use Claude for text extraction
+  // LinkedIn: try Bright Data first (structured API), then fall back to crawler UA + Claude
   if (platform === "linkedin" && opts.url) {
+    // Step 1: Try Bright Data — returns rich structured data, no LLM needed
+    const bd = await scrapeWithBrightData(opts.url);
+    usageLog.push(bd.usage);
+
+    if (bd.profile && isProfileMeaningful(bd.profile)) {
+      console.log("[enrich] Bright Data returned rich profile");
+      return { profile: bd.profile, usageLog };
+    }
+
+    // Step 2: Fall back to crawler UA scraper + Claude extraction
+    console.log("[enrich] Bright Data unavailable, falling back to scraper");
     const scraped = await scrapeLinkedInProfile(opts.url);
     usageLog.push(scraped.usage);
 
-    // Always call Claude if we have raw text - it handles every profile layout
+    // Use Claude if we have raw text
     if (scraped.rawText && scraped.rawText.length > 100) {
       const claude = await llmExtractProfile(scraped.rawText, opts.url);
       usageLog.push(claude.usage);
 
       if (claude.profile && isProfileMeaningful(claude.profile)) {
-        if (scraped.profile) {
-          // Merge: scraper provides photo/followers/structured data, Claude provides rich text data
-          return { profile: mergeProfiles(scraped.profile, claude.profile), usageLog };
-        }
-        return { profile: claude.profile, usageLog };
+        const profile = scraped.profile
+          ? mergeProfiles(scraped.profile, claude.profile)
+          : claude.profile;
+        profile.dataSource = "llm_extracted";
+        return { profile, usageLog };
       }
     }
 
     // Fall back to scraper data if Claude failed
     if (isProfileMeaningful(scraped.profile)) {
+      scraped.profile!.dataSource = "scraper";
       return { profile: scraped.profile, usageLog };
     }
 

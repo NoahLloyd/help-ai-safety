@@ -3,7 +3,34 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 
-const DEFAULT_PERPLEXITY_PROMPT = `Search for this person and look them up anywhere you can find. Extract all information you can find about them. Output sections with bullet lists in each of every idea or thing about them you can find. This should be a fairly comprehensive overview extracting every single thing about them from their public presence.`;
+type Provider = "perplexity" | "exa" | "tavily";
+
+const DEFAULT_PERPLEXITY_PROMPT = `Search for this specific person and report ONLY facts you can verify from search results. Do NOT guess, infer, or fill in gaps.
+
+Output these sections (skip any section where you found nothing):
+
+## Identity
+- Full name
+- Current job title and company
+- Location
+
+## Professional Background
+- Current and past roles (only those explicitly found in sources)
+- Key skills or areas of expertise mentioned in their profiles
+
+## Education
+- Schools, degrees, fields of study (only if explicitly stated)
+
+## Public Presence
+- Notable projects, publications, talks, or open-source work
+- Any public writing, blog posts, or media appearances
+
+IMPORTANT RULES:
+- If the name is common, only include information you are confident belongs to THIS specific person. Look for consistency across sources.
+- NEVER fabricate roles, companies, education, or achievements. If you only found a name and headline, report only that.
+- If you found very little, say so explicitly. A short accurate response is far better than a long fabricated one.
+- Do NOT include generic biographical filler or assumptions about someone's interests based on their field.
+- Each fact should be traceable to a search result.`;
 
 interface PromptResult {
   text: string;
@@ -14,6 +41,7 @@ interface PromptResult {
   prompt: string;
   query: string;
   timestamp: number;
+  provider?: Provider;
 }
 
 interface ScrapeResult {
@@ -29,6 +57,10 @@ export default function PromptTesterPage() {
   // Prompt state
   const [promptA, setPromptA] = useState(DEFAULT_PERPLEXITY_PROMPT);
   const [promptB, setPromptB] = useState("");
+
+  // Provider state
+  const [providerA, setProviderA] = useState<Provider>("perplexity");
+  const [providerB, setProviderB] = useState<Provider>("exa");
 
   // Results
   const [resultA, setResultA] = useState<PromptResult | null>(null);
@@ -49,6 +81,7 @@ export default function PromptTesterPage() {
 
   async function runPrompt(
     prompt: string,
+    provider: Provider,
     setter: (r: PromptResult) => void,
     setLoading: (b: boolean) => void,
   ) {
@@ -63,7 +96,7 @@ export default function PromptTesterPage() {
       const res = await fetch("/api/admin/test-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim(), systemPrompt: prompt }),
+        body: JSON.stringify({ query: query.trim(), systemPrompt: prompt, provider }),
       });
 
       if (!res.ok) {
@@ -75,6 +108,7 @@ export default function PromptTesterPage() {
       const result: PromptResult = {
         ...data,
         prompt,
+        provider,
         query: query.trim(),
         timestamp: Date.now(),
       };
@@ -165,7 +199,7 @@ export default function PromptTesterPage() {
           </h1>
         </div>
         <p className="text-sm text-muted mt-1">
-          Test Perplexity prompts against real queries. Compare results side-by-side.
+          Test search providers and prompts against real queries. Compare results side-by-side.
         </p>
       </header>
 
@@ -264,10 +298,21 @@ export default function PromptTesterPage() {
         {/* Prompt A */}
         <section className="p-5 bg-card border border-border rounded-xl">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-foreground">
-              Prompt A
-              <span className="ml-2 text-xs text-muted font-normal">(current)</span>
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-medium text-foreground">
+                Prompt A
+              </h2>
+              <select
+                value={providerA}
+                onChange={(e) => setProviderA(e.target.value as Provider)}
+                className="px-2 py-1 text-[11px] bg-background border border-border rounded-md
+                  text-foreground outline-none focus:border-accent cursor-pointer"
+              >
+                <option value="perplexity">Perplexity</option>
+                <option value="exa">Exa</option>
+                <option value="tavily">Tavily</option>
+              </select>
+            </div>
             <button
               onClick={() => setPromptA(DEFAULT_PERPLEXITY_PROMPT)}
               className="text-xs text-muted hover:text-foreground cursor-pointer"
@@ -275,17 +320,24 @@ export default function PromptTesterPage() {
               reset
             </button>
           </div>
-          <textarea
-            value={promptA}
-            onChange={(e) => setPromptA(e.target.value)}
-            rows={6}
-            className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-xs
-              text-foreground font-mono leading-relaxed resize-y outline-none focus:border-accent"
-          />
+          {providerA === "perplexity" && (
+            <textarea
+              value={promptA}
+              onChange={(e) => setPromptA(e.target.value)}
+              rows={6}
+              className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-xs
+                text-foreground font-mono leading-relaxed resize-y outline-none focus:border-accent mb-3"
+            />
+          )}
+          {providerA !== "perplexity" && (
+            <p className="text-xs text-muted-foreground mb-3 px-1">
+              {providerA === "exa" ? "Exa uses its people search index — no prompt needed." : "Tavily uses web search with domain filtering — no prompt needed."}
+            </p>
+          )}
           <button
-            onClick={() => runPrompt(promptA, setResultA, setLoadingA)}
+            onClick={() => runPrompt(promptA, providerA, setResultA, setLoadingA)}
             disabled={loadingA}
-            className="mt-3 px-5 py-2.5 text-xs font-medium bg-foreground text-background
+            className="px-5 py-2.5 text-xs font-medium bg-foreground text-background
               rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {loadingA ? (
@@ -294,7 +346,7 @@ export default function PromptTesterPage() {
                 Running...
               </span>
             ) : (
-              "Run Prompt A"
+              `Run ${providerA === "perplexity" ? "Prompt" : ""} A (${providerA})`
             )}
           </button>
         </section>
@@ -302,10 +354,21 @@ export default function PromptTesterPage() {
         {/* Prompt B */}
         <section className="p-5 bg-card border border-border rounded-xl">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-foreground">
-              Prompt B
-              <span className="ml-2 text-xs text-muted font-normal">(experimental)</span>
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-medium text-foreground">
+                Prompt B
+              </h2>
+              <select
+                value={providerB}
+                onChange={(e) => setProviderB(e.target.value as Provider)}
+                className="px-2 py-1 text-[11px] bg-background border border-border rounded-md
+                  text-foreground outline-none focus:border-accent cursor-pointer"
+              >
+                <option value="perplexity">Perplexity</option>
+                <option value="exa">Exa</option>
+                <option value="tavily">Tavily</option>
+              </select>
+            </div>
             <button
               onClick={() => setPromptB(promptA)}
               className="text-xs text-muted hover:text-foreground cursor-pointer"
@@ -313,19 +376,26 @@ export default function PromptTesterPage() {
               copy from A
             </button>
           </div>
-          <textarea
-            value={promptB}
-            onChange={(e) => setPromptB(e.target.value)}
-            rows={6}
-            placeholder="Paste an alternative prompt here to compare..."
-            className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-xs
-              text-foreground font-mono leading-relaxed resize-y outline-none focus:border-accent
-              placeholder:text-muted"
-          />
+          {providerB === "perplexity" && (
+            <textarea
+              value={promptB}
+              onChange={(e) => setPromptB(e.target.value)}
+              rows={6}
+              placeholder="Paste an alternative prompt here to compare..."
+              className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-xs
+                text-foreground font-mono leading-relaxed resize-y outline-none focus:border-accent
+                placeholder:text-muted mb-3"
+            />
+          )}
+          {providerB !== "perplexity" && (
+            <p className="text-xs text-muted-foreground mb-3 px-1">
+              {providerB === "exa" ? "Exa uses its people search index — no prompt needed." : "Tavily uses web search with domain filtering — no prompt needed."}
+            </p>
+          )}
           <button
-            onClick={() => runPrompt(promptB, setResultB, setLoadingB)}
-            disabled={loadingB || !promptB.trim()}
-            className="mt-3 px-5 py-2.5 text-xs font-medium bg-foreground text-background
+            onClick={() => runPrompt(promptB, providerB, setResultB, setLoadingB)}
+            disabled={loadingB || (providerB === "perplexity" && !promptB.trim())}
+            className="px-5 py-2.5 text-xs font-medium bg-foreground text-background
               rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {loadingB ? (
@@ -334,7 +404,7 @@ export default function PromptTesterPage() {
                 Running...
               </span>
             ) : (
-              "Run Prompt B"
+              `Run ${providerB === "perplexity" ? "Prompt" : ""} B (${providerB})`
             )}
           </button>
         </section>
@@ -344,16 +414,16 @@ export default function PromptTesterPage() {
       <div className="flex justify-center mb-8">
         <button
           onClick={() => {
-            runPrompt(promptA, setResultA, setLoadingA);
-            if (promptB.trim()) {
-              runPrompt(promptB, setResultB, setLoadingB);
+            runPrompt(promptA, providerA, setResultA, setLoadingA);
+            if (providerB !== "perplexity" || promptB.trim()) {
+              runPrompt(promptB, providerB, setResultB, setLoadingB);
             }
           }}
           disabled={loadingA || loadingB || !query.trim()}
           className="px-8 py-3 text-sm font-medium bg-accent text-white
             rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
         >
-          {loadingA || loadingB ? "Running..." : `Run ${promptB.trim() ? "Both" : "Prompt A"}`}
+          {loadingA || loadingB ? "Running..." : "Run Both"}
         </button>
       </div>
 
@@ -363,11 +433,14 @@ export default function PromptTesterPage() {
           {/* Result A */}
           <section ref={resultARef} className="p-5 bg-card border border-border rounded-xl">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-medium text-foreground">Result A</h2>
+              <h2 className="text-sm font-medium text-foreground">
+                Result A
+                {resultA?.provider && <span className="ml-2 text-xs text-muted font-normal">({resultA.provider})</span>}
+              </h2>
               {resultA && (
                 <div className="flex items-center gap-3 text-[11px] font-mono text-muted">
                   <span>{resultA.durationMs}ms</span>
-                  <span>{resultA.inputTokens}in / {resultA.outputTokens}out</span>
+                  {resultA.inputTokens > 0 && <span>{resultA.inputTokens}in / {resultA.outputTokens}out</span>}
                 </div>
               )}
             </div>
@@ -409,11 +482,14 @@ export default function PromptTesterPage() {
           {/* Result B */}
           <section ref={resultBRef} className="p-5 bg-card border border-border rounded-xl">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-medium text-foreground">Result B</h2>
+              <h2 className="text-sm font-medium text-foreground">
+                Result B
+                {resultB?.provider && <span className="ml-2 text-xs text-muted font-normal">({resultB.provider})</span>}
+              </h2>
               {resultB && (
                 <div className="flex items-center gap-3 text-[11px] font-mono text-muted">
                   <span>{resultB.durationMs}ms</span>
-                  <span>{resultB.inputTokens}in / {resultB.outputTokens}out</span>
+                  {resultB.inputTokens > 0 && <span>{resultB.inputTokens}in / {resultB.outputTokens}out</span>}
                 </div>
               )}
             </div>
@@ -478,6 +554,7 @@ export default function PromptTesterPage() {
                   bg-background hover:bg-foreground/5 cursor-pointer text-sm">
                   <div className="flex items-center gap-3">
                     <span className="text-foreground font-medium">{h.query}</span>
+                    {h.provider && <span className="text-[10px] font-mono text-accent/70 bg-accent/10 px-1.5 py-0.5 rounded">{h.provider}</span>}
                     <span className="text-[11px] font-mono text-muted">
                       {h.durationMs}ms
                     </span>

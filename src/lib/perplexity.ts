@@ -57,7 +57,32 @@ export async function searchPerson(query: string): Promise<{
       messages: [
         {
           role: "system",
-          content: `Search for this person and look them up anywhere you can find. Extract all information you can find about them. Output sections with bullet lists in each of every idea or thing about them you can find. This should be a fairly comprehensive overview extracting every single thing about them from their public presence.`,
+          content: `Search for this specific person and report ONLY facts you can verify from search results. Do NOT guess, infer, or fill in gaps.
+
+Output these sections (skip any section where you found nothing):
+
+## Identity
+- Full name
+- Current job title and company
+- Location
+
+## Professional Background
+- Current and past roles (only those explicitly found in sources)
+- Key skills or areas of expertise mentioned in their profiles
+
+## Education
+- Schools, degrees, fields of study (only if explicitly stated)
+
+## Public Presence
+- Notable projects, publications, talks, or open-source work
+- Any public writing, blog posts, or media appearances
+
+IMPORTANT RULES:
+- If the name is common, only include information you are confident belongs to THIS specific person. Look for consistency across sources.
+- NEVER fabricate roles, companies, education, or achievements. If you only found a name and headline, report only that.
+- If you found very little, say so explicitly. A short accurate response is far better than a long fabricated one.
+- Do NOT include generic biographical filler or assumptions about someone's interests based on their field.
+- Each fact should be traceable to a search result.`,
         },
         {
           role: "user",
