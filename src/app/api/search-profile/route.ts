@@ -1,23 +1,39 @@
 import { NextResponse } from "next/server";
-import { searchPerson } from "@/lib/perplexity";
+import { searchPerson as perplexitySearch } from "@/lib/perplexity";
+import { searchPerson as exaSearch } from "@/lib/exa";
+import { searchPerson as tavilySearch } from "@/lib/tavily";
 import { getSupabase } from "@/lib/supabase";
+
+export type SearchProvider = "perplexity" | "exa" | "tavily";
 
 export async function POST(req: Request) {
   try {
-    const { query } = await req.json();
+    const body = await req.json();
+    const query: string | undefined = body.query;
+    const provider: SearchProvider = body.provider || "perplexity";
 
     if (!query || typeof query !== "string" || query.trim().length < 2) {
       return NextResponse.json({ text: null, error: "Query is required" }, { status: 400 });
     }
 
-    if (!process.env.PERPLEXITY_API_KEY) {
+    // Dispatch to the requested provider
+    const search = provider === "exa" ? exaSearch
+      : provider === "tavily" ? tavilySearch
+      : perplexitySearch;
+
+    // Check that the provider is configured
+    const envKey = provider === "exa" ? "EXA_API_KEY"
+      : provider === "tavily" ? "TAVILY_API_KEY"
+      : "PERPLEXITY_API_KEY";
+
+    if (!process.env[envKey]) {
       return NextResponse.json({
         text: null,
-        message: "Profile search is not yet configured. Please paste a direct profile link.",
+        message: `${provider} is not configured. Please paste a direct profile link.`,
       });
     }
 
-    const { text, citations, usage } = await searchPerson(query.trim());
+    const { text, citations, usage } = await search(query.trim());
 
     // Log usage
     const supabase = getSupabase();
@@ -32,7 +48,7 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ text, citations });
+    return NextResponse.json({ text, citations, provider });
   } catch {
     return NextResponse.json({ text: null, error: "Invalid request" }, { status: 400 });
   }

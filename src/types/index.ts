@@ -166,6 +166,8 @@ export interface ProfileRepo {
   language?: string;
 }
 
+export type ProfileDataSource = "bright_data" | "scraper" | "llm_extracted" | "github_api" | "og_tags";
+
 export interface EnrichedProfile {
   fullName?: string;
   headline?: string;
@@ -184,6 +186,8 @@ export interface EnrichedProfile {
   repos?: ProfileRepo[];
   followers?: number;
   fetchedAt: string;
+  /** Where the profile data primarily came from — used for confidence signaling */
+  dataSource?: ProfileDataSource;
 }
 
 // ─── Claude Recommendations ─────────────────────────────────
@@ -277,7 +281,7 @@ export interface CreatorPageData {
 
 export interface ApiUsageEntry {
   id?: number;
-  provider: "claude" | "openai" | "github" | "scrape" | "perplexity";
+  provider: "claude" | "openai" | "github" | "scrape" | "perplexity" | "exa" | "tavily";
   model?: string;
   endpoint?: string;
   input_tokens?: number;

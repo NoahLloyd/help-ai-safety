@@ -27,12 +27,12 @@ Your job is to rank the resources from most to least relevant FOR THIS SPECIFIC 
 
 ## CRITICAL: Profile Data Quality Warning
 
-The profile data is automatically scraped and may contain noise, errors, or content that is NOT about this person. Common issues:
-- Activity feed content (other people's posts this person liked/commented on) may have been incorrectly attributed to them
-- Text in a foreign language that doesn't match the person's actual location/background is likely from someone else's content
-- Job titles or companies may belong to connections, not the profile owner
+The profile data comes from multiple sources with varying reliability:
+- **High confidence** (dataSource: "bright_data" or "github_api"): Structured API data — name, role, company, education, skills are reliable.
+- **Medium confidence** (dataSource: "scraper" or "llm_extracted"): Scraped from HTML with AI extraction — mostly accurate but may contain noise from other people's content on the page (activity feed posts, connection names).
+- **Low confidence** (web search text, profileText field): Web search results about this person — may confuse different people with the same name or include unverified claims.
 
-Use your best judgment to determine what is actually true about this person. Look for consistency - their name, headline, current role, and About section are the most reliable signals. If profile details seem contradictory or unlikely (e.g., a Nashville-based person with a Danish-language job description), ignore the suspect information and rely on what you're confident about. It is better to give slightly less personalized recommendations than to personalize based on wrong information.
+Use your best judgment to determine what is actually true about this person. Trust high-confidence data fully. For medium-confidence data, look for consistency across fields. For low-confidence web search text, only rely on facts that are consistent with the structured profile data. If profile details seem contradictory or unlikely, ignore the suspect information. It is better to give slightly less personalized recommendations than to personalize based on wrong information.
 
 ## Ranking Principles
 
@@ -299,10 +299,19 @@ function buildUserPrompt(
   // Build profile section
   const profileLines: string[] = [];
 
-  // If we have raw Perplexity text, use it directly - it's already a comprehensive overview
-  if (answers.profileText) {
-    profileLines.push(answers.profileText);
-  } else if (profile) {
+  // Structured profile data (high/medium confidence)
+  if (profile) {
+    if (profile.dataSource) profileLines.push(`Data source: ${profile.dataSource} (${profile.dataSource === "bright_data" || profile.dataSource === "github_api" ? "high" : "medium"} confidence)`);
+  }
+  // Web search text as supplementary (low confidence)
+  if (answers.profileText && !profile) {
+    // Only use web search as primary source if no structured profile
+    profileLines.push(`[Web search results — low confidence]\n${answers.profileText}`);
+  } else if (answers.profileText && profile) {
+    // Append web search as supplement after structured data
+    profileLines.push(`\n[Supplementary web search — low confidence, only use to fill gaps]\n${answers.profileText}`);
+  }
+  if (profile) {
     if (profile.fullName) profileLines.push(`Name: ${profile.fullName}`);
     if (profile.headline) profileLines.push(`Headline: ${profile.headline}`);
     if (profile.currentTitle && profile.currentCompany) {

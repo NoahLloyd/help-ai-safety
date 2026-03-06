@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import OpenAI from "openai";
+import { searchPerson as exaSearch } from "@/lib/exa";
+import { searchPerson as tavilySearch } from "@/lib/tavily";
 
 export const dynamic = "force-dynamic";
 
-const BASE_URL = "https://api.perplexity.ai";
-const MODEL = "sonar";
+const PERPLEXITY_BASE_URL = "https://api.perplexity.ai";
+const PERPLEXITY_MODEL = "sonar";
+
+type Provider = "perplexity" | "exa" | "tavily";
 
 async function verifyAdmin() {
   const session = (await cookies()).get("admin_session");
@@ -22,14 +26,53 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { query, systemPrompt } = (await req.json()) as {
+    const { query, systemPrompt, provider = "perplexity" } = (await req.json()) as {
       query: string;
       systemPrompt: string;
+      provider?: Provider;
     };
 
     if (!query?.trim()) {
       return NextResponse.json({ error: "query required" }, { status: 400 });
     }
+
+    const start = Date.now();
+
+    // ─── Exa ────────────────────────────────────────────
+    if (provider === "exa") {
+      if (!process.env.EXA_API_KEY) {
+        return NextResponse.json({ error: "EXA_API_KEY not configured" }, { status: 500 });
+      }
+      const { text, citations } = await exaSearch(query.trim());
+      const durationMs = Date.now() - start;
+      return NextResponse.json({
+        text: text || "No results found",
+        citations,
+        inputTokens: 0,
+        outputTokens: 0,
+        durationMs,
+        provider: "exa",
+      });
+    }
+
+    // ─── Tavily ─────────────────────────────────────────
+    if (provider === "tavily") {
+      if (!process.env.TAVILY_API_KEY) {
+        return NextResponse.json({ error: "TAVILY_API_KEY not configured" }, { status: 500 });
+      }
+      const { text, citations } = await tavilySearch(query.trim());
+      const durationMs = Date.now() - start;
+      return NextResponse.json({
+        text: text || "No results found",
+        citations,
+        inputTokens: 0,
+        outputTokens: 0,
+        durationMs,
+        provider: "tavily",
+      });
+    }
+
+    // ─── Perplexity (default) ───────────────────────────
     if (!systemPrompt?.trim()) {
       return NextResponse.json({ error: "systemPrompt required" }, { status: 400 });
     }
@@ -39,11 +82,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "PERPLEXITY_API_KEY not configured" }, { status: 500 });
     }
 
-    const client = new OpenAI({ apiKey, baseURL: BASE_URL });
+    const client = new OpenAI({ apiKey, baseURL: PERPLEXITY_BASE_URL });
 
-    const start = Date.now();
     const response = await client.chat.completions.create({
-      model: MODEL,
+      model: PERPLEXITY_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: query },
@@ -63,6 +105,7 @@ export async function POST(req: Request) {
       inputTokens,
       outputTokens,
       durationMs,
+      provider: "perplexity",
     });
   } catch (err) {
     console.error("[test-prompt] Error:", err);
