@@ -3,6 +3,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { Resource, ResourceCategory } from "@/types";
+import type { PromptKey, PromptVersion } from "@/lib/prompts";
+import { clearPromptCache } from "@/lib/prompts";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -518,6 +520,102 @@ export async function rejectProgramCandidate(id: string): Promise<void> {
     .update({ status: "rejected" })
     .eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// ─── Prompt Versions ───────────────────────────────────────
+
+export async function fetchPromptVersions(
+  promptKey: PromptKey,
+): Promise<PromptVersion[]> {
+  await verifyAdmin();
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("prompt_versions")
+    .select("*")
+    .eq("prompt_key", promptKey)
+    .order("version", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data as PromptVersion[]) || [];
+}
+
+export async function savePromptVersion(
+  promptKey: PromptKey,
+  content: string,
+  model: string | null,
+  note: string | null,
+): Promise<PromptVersion> {
+  await verifyAdmin();
+  const supabase = getServiceClient();
+
+  // Get the latest version number
+  const { data: latest } = await supabase
+    .from("prompt_versions")
+    .select("version")
+    .eq("prompt_key", promptKey)
+    .order("version", { ascending: false })
+    .limit(1)
+    .single();
+
+  const nextVersion = (latest?.version || 0) + 1;
+
+  const { data, error } = await supabase
+    .from("prompt_versions")
+    .insert({
+      prompt_key: promptKey,
+      version: nextVersion,
+      content,
+      model: model || null,
+      note: note || null,
+      is_active: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as PromptVersion;
+}
+
+export async function activatePromptVersion(id: number): Promise<void> {
+  await verifyAdmin();
+  const supabase = getServiceClient();
+
+  // Get the prompt_key for this version
+  const { data: version, error: fetchErr } = await supabase
+    .from("prompt_versions")
+    .select("prompt_key")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !version) throw new Error("Version not found");
+
+  // Deactivate current active version for this key
+  await supabase
+    .from("prompt_versions")
+    .update({ is_active: false })
+    .eq("prompt_key", version.prompt_key)
+    .eq("is_active", true);
+
+  // Activate the selected version
+  const { error } = await supabase
+    .from("prompt_versions")
+    .update({ is_active: true })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  clearPromptCache();
+}
+
+export async function deactivatePromptVersion(id: number): Promise<void> {
+  await verifyAdmin();
+  const supabase = getServiceClient();
+
+  const { error } = await supabase
+    .from("prompt_versions")
+    .update({ is_active: false })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  clearPromptCache();
 }
 
 // ─── API Usage / Cost Stats ────────────────────────────────
