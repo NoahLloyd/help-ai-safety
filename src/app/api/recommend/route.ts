@@ -274,6 +274,7 @@ export async function POST(req: Request) {
             "",
         };
         if (item.title) rec.title = item.title as string;
+        if (item.matchReason) rec.matchReason = item.matchReason as string;
         recommendations.push(rec);
       }
     } catch {
